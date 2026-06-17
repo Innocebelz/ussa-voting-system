@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '../types';
 
+// --- YOUR LIVE RENDER BACKEND URL ---
+const API_BASE_URL = 'https://laa-voting-system.onrender.com';
+
 interface AuthContextType {
   user: User | null;
   matNumber: string | null;
@@ -45,9 +48,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     else localStorage.removeItem('laa_email');
   }, [maskedEmail]);
 
-  // 3. Standard API Functions
+  // 3. API Functions (Connected to Cloud Backend)
   const login = async (matNum: string) => {
-    const res = await fetch('/api/request-otp', {
+    const res = await fetch(`${API_BASE_URL}/api/request-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ matric_number: matNum })
@@ -66,13 +69,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const verifyOtp = async (otp: string) => {
     if (!matNumber) throw new Error('Matriculation number is missing.');
 
-    const res = await fetch('/api/verify-otp', {
+    const res = await fetch(`${API_BASE_URL}/api/verify-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ matric_number: matNumber, otp_code: otp })
     });
 
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
+
     if (!res.ok) {
       throw new Error(data.detail || 'Invalid OTP');
     }
@@ -99,7 +103,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       coordinator: userBallot['Coordinator'] || ''
     };
 
-    const res = await fetch('/api/vote', {
+    const res = await fetch(`${API_BASE_URL}/api/vote`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
