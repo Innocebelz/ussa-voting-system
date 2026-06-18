@@ -130,19 +130,20 @@ def send_otp_email(receiver_email: str, otp_code: str):
     msg = MIMEText(f"Hello,\n\nYour LAA Election OTP code is: {otp_code}\n\nDo not share this code with anyone.")
     msg['Subject'] = 'LAA Election - Your Secure OTP'
 
-    # FIX: Explicitly embed the authenticated email to pass Google's anti-spam filters
+    # Explicitly embed the authenticated email to pass Google's anti-spam filters
     msg['From'] = f"LAA Electoral Commission <{sender_email}>"
     msg['To'] = receiver_email
 
     try:
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+        # Using Port 587 and STARTTLS to bypass Render's IPv6 block
+        with smtplib.SMTP('smtp.gmail.com', 587) as server:
+            server.ehlo()
+            server.starttls() # Upgrades the connection to a secure encrypted tunnel
             server.login(sender_email, sender_password)
             server.send_message(msg)
             print(f"System: Email successfully sent to {receiver_email}")
     except Exception as e:
-        print(f"System Error: Failed to send email: {e}")
-
-# --- API Routes ---
+        print(f"System Error: Failed to send email: {e}")# --- API Routes ---
 @app.post("/api/request-otp")
 def request_otp(payload: OTPRequest):
     conn = get_db()
