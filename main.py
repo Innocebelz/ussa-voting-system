@@ -17,9 +17,16 @@ load_dotenv()
 
 app = FastAPI(title="LAA Voting API")
 
+# --- PRODUCTION CORS CONFIGURATION ---
+# STRICT RULE: When allow_credentials=True, you CANNOT use "*" in allow_origins.
+# You must explicitly list the exact URLs that are allowed to talk to this server.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000", "*"],
+    allow_origins=[
+        "https://laa-voting-system.vercel.app", # Your live Vercel frontend
+        "http://localhost:5173",                # Local Vite testing
+        "http://localhost:3000"                 # Local React testing
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -122,7 +129,9 @@ def send_otp_email(receiver_email: str, otp_code: str):
 
     msg = MIMEText(f"Hello,\n\nYour LAA Election OTP code is: {otp_code}\n\nDo not share this code with anyone.")
     msg['Subject'] = 'LAA Election - Your Secure OTP'
-    msg['From'] = "LAA Electoral Commission"
+
+    # FIX: Explicitly embed the authenticated email to pass Google's anti-spam filters
+    msg['From'] = f"LAA Electoral Commission <{sender_email}>"
     msg['To'] = receiver_email
 
     try:
@@ -314,7 +323,6 @@ def get_vote_tally():
         for pos in positions:
             cursor.execute(f"SELECT {pos}, COUNT(*) as votes FROM Ballots WHERE {pos} IS NOT NULL AND {pos} != '' GROUP BY {pos}")
             pos_results = cursor.fetchall()
-            # pos_results[0][pos] gives us the candidate ID, pos_results[0]['votes'] gives us the count
             results[pos] = [{"candidate_id": row[pos], "votes": row["votes"]} for row in pos_results]
 
         return {"status": "success", "data": results}
