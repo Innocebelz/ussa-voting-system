@@ -1,31 +1,32 @@
 import os
 import random
 import smtplib
-from datetime import datetime, timedelta
 from email.mime.text import MIMEText
+from datetime import datetime, timedelta
 from typing import Dict
 
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 load_dotenv()
 
+# ---------------------------------------------------------------------------
+# App Setup
+# ---------------------------------------------------------------------------
+
 app = FastAPI(title="LAA Voting API")
 
-# --- PRODUCTION CORS CONFIGURATION ---
-# STRICT RULE: When allow_credentials=True, you CANNOT use "*" in allow_origins.
-# You must explicitly list the exact URLs that are allowed to talk to this server.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://laa-voting-system.vercel.app", # Your live Vercel frontend
-        "http://localhost:5173",                # Local Vite testing
-        "http://localhost:3000"                 # Local React testing
+        "https://laa-voting-system.vercel.app",
+        "http://localhost:5173",
+        "http://localhost:3000",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -34,326 +35,407 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Get Cloud Database URL from .env
+# ---------------------------------------------------------------------------
+# Database
+# ---------------------------------------------------------------------------
+
 DB_URL = os.getenv("DATABASE_URL")
 
+
 def get_db():
-    # Use RealDictCursor to keep our dict-like row access
     conn = psycopg2.connect(DB_URL)
-    return conn
+    try:
+        yield conn
+    finally:
+        conn.close()
+
 
 def init_db():
-    conn = get_db()
+    conn = psycopg2.connect(DB_URL)
     try:
-        cursor = conn.cursor()
-
-        # Create Tables with Postgres Syntax
-        cursor.execute('''
-                       CREATE TABLE IF NOT EXISTS Voters (
-                                                             matric_number TEXT PRIMARY KEY,
-                                                             name TEXT NOT NULL,
-                                                             email TEXT NOT NULL,
-                                                             has_voted BOOLEAN NOT NULL DEFAULT FALSE
-                       )
-                       ''')
-
-        cursor.execute('''
-                       CREATE TABLE IF NOT EXISTS OTP_Sessions (
-                                                                   matric_number TEXT,
-                                                                   otp_code TEXT NOT NULL,
-                                                                   expires_at TIMESTAMP NOT NULL,
-                                                                   FOREIGN KEY(matric_number) REFERENCES Voters(matric_number)
-                           )
-                       ''')
-
-        cursor.execute('''
-                       CREATE TABLE IF NOT EXISTS Ballots (
+        with conn.cursor() as cur:
+            cur.execute("""
+                        CREATE TABLE IF NOT EXISTS Voters (
                                                               matric_number TEXT PRIMARY KEY,
-                                                              president TEXT,
-                                                              vice_president TEXT,
-                                                              speaker TEXT,
-                                                              treasurer TEXT,
-                                                              general_secretary TEXT,
-                                                              coordinator TEXT,
-                                                              FOREIGN KEY(matric_number) REFERENCES Voters(matric_number)
-                           )
-                       ''')
+                                                              name          TEXT NOT NULL,
+                                                              email         TEXT NOT NULL,
+                                                              has_voted     BOOLEAN NOT NULL DEFAULT FALSE
+                        )
+                        """)
 
-        cursor.execute('''
-                       CREATE TABLE IF NOT EXISTS System_Settings (
-                                                                      id INTEGER PRIMARY KEY,
-                                                                      election_open BOOLEAN NOT NULL DEFAULT TRUE
-                       )
-                       ''')
+            cur.execute("""
+                        CREATE TABLE IF NOT EXISTS OTP_Sessions (
+                                                                    matric_number TEXT REFERENCES Voters(matric_number),
+                            otp_code      TEXT NOT NULL,
+                            expires_at    TIMESTAMP NOT NULL
+                            )
+                        """)
 
-        # Initialize the setting if it doesn't exist
-        cursor.execute("SELECT COUNT(*) as count FROM System_Settings")
-        if cursor.fetchone()[0] == 0:
-            cursor.execute("INSERT INTO System_Settings (id, election_open) VALUES (1, TRUE)")
+            cur.execute("""
+                        CREATE TABLE IF NOT EXISTS Ballots (
+                                                               matric_number    TEXT PRIMARY KEY REFERENCES Voters(matric_number),
+                            president        TEXT,
+                            vice_president   TEXT,
+                            speaker          TEXT,
+                            treasurer        TEXT,
+                            general_secretary TEXT,
+                            coordinator      TEXT
+                            )
+                        """)
+
+            cur.execute("""
+                        CREATE TABLE IF NOT EXISTS System_Settings (
+                                                                       id            INTEGER PRIMARY KEY,
+                                                                       election_open BOOLEAN NOT NULL DEFAULT TRUE
+                        )
+                        """)
+
+            cur.execute("SELECT COUNT(*) FROM System_Settings")
+            if cur.fetchone()[0] == 0:
+                cur.execute(
+                    "INSERT INTO System_Settings (id, election_open) VALUES (1, TRUE)"
+                )
 
         conn.commit()
     except Exception as e:
-        print(f"Database Initialization Error: {e}")
         conn.rollback()
+        print(f"[DB Init Error] {e}")
     finally:
-        cursor.close()
         conn.close()
+
 
 @app.on_event("startup")
 def startup_event():
     init_db()
 
-# --- Pydantic Models ---
+
+# ---------------------------------------------------------------------------
+# Pydantic Models
+# ---------------------------------------------------------------------------
+
 class OTPRequest(BaseModel):
     matric_number: str
+
 
 class OTPVerify(BaseModel):
     matric_number: str
     otp_code: str
 
+
 class VotePayload(BaseModel):
     matric_number: str
     choices: Dict[str, str]
 
+
 class StatusUpdate(BaseModel):
     election_open: bool
 
-# --- Helper Functions ---
+
+# ---------------------------------------------------------------------------
+# Email — Brevo SMTP
+# ---------------------------------------------------------------------------
+
+def _otp_html(otp_code: str) -> str:
+    return f"""
+        <div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;">
+            <h2 style="color:#1a1a2e;">LAA Electoral Commission</h2>
+            <p>Hello,</p>
+            <p>Your one-time password (OTP) for the LAA Election is:</p>
+            <div style="font-size:2rem;font-weight:bold;letter-spacing:8px;
+                        color:#1a1a2e;text-align:center;padding:16px 0;">
+                {otp_code}
+            </div>
+            <p>This code expires in <strong>5 minutes</strong>.<br>
+            Do not share it with anyone.</p>
+            <hr style="border:none;border-top:1px solid #eee;">
+            <small style="color:#888;">
+                If you did not request this, please ignore this email.
+            </small>
+        </div>
+    """
+
+
 def send_otp_email(receiver_email: str, otp_code: str):
-    sender_email = os.getenv("EMAIL_SENDER")
-    sender_password = os.getenv("EMAIL_PASSWORD")
+    """Send OTP via Brevo SMTP. Raises HTTPException on failure."""
+    sender_email = os.getenv("BREVO_EMAIL")
+    smtp_key = os.getenv("BREVO_SMTP_KEY")
 
-    if not sender_email or not sender_password:
-        print("Error: Email credentials missing from .env file.")
-        return
-
-    msg = MIMEText(f"Hello,\n\nYour LAA Election OTP code is: {otp_code}\n\nDo not share this code with anyone.")
-    msg['Subject'] = 'LAA Election - Your Secure OTP'
-
-    # Explicitly embed the authenticated email to pass Google's anti-spam filters
-    msg['From'] = f"LAA Electoral Commission <{sender_email}>"
-    msg['To'] = receiver_email
-
-    try:
-        # Using Port 587 and STARTTLS to bypass Render's IPv6 block
-        with smtplib.SMTP('smtp.gmail.com', 587) as server:
-            server.ehlo()
-            server.starttls() # Upgrades the connection to a secure encrypted tunnel
-            server.login(sender_email, sender_password)
-            server.send_message(msg)
-            print(f"System: Email successfully sent to {receiver_email}")
-    except Exception as e:
-        print(f"System Error: Failed to send email: {e}")# --- API Routes ---
-@app.post("/api/request-otp")
-def request_otp(payload: OTPRequest):
-    conn = get_db()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
-    try:
-        cursor.execute("SELECT email FROM Voters WHERE matric_number = %s", (payload.matric_number,))
-        voter = cursor.fetchone()
-
-        if not voter:
-            raise HTTPException(status_code=404, detail="Matriculation number not found.")
-
-        email = voter["email"]
-
-        email_parts = email.split('@')
-        if len(email_parts[0]) > 2:
-            masked_email = f"{email_parts[0][0]}{'*' * (len(email_parts[0])-2)}{email_parts[0][-1]}@{email_parts[1]}"
-        else:
-            masked_email = email
-
-        otp_code = str(random.SystemRandom().randint(100000, 999999))
-        expires_at = datetime.now() + timedelta(minutes=5)
-
-        cursor.execute("DELETE FROM OTP_Sessions WHERE matric_number = %s", (payload.matric_number,))
-        cursor.execute(
-            "INSERT INTO OTP_Sessions (matric_number, otp_code, expires_at) VALUES (%s, %s, %s)",
-            (payload.matric_number, otp_code, expires_at)
+    if not sender_email or not smtp_key:
+        print("[Brevo Error] BREVO_EMAIL or BREVO_SMTP_KEY not set.")
+        raise HTTPException(
+            status_code=500,
+            detail="Email service is not configured. Contact the administrator."
         )
-        conn.commit()
 
-        send_otp_email(email, otp_code)
+    msg = MIMEText(
+        f"Hello,\n\n"
+        f"Your LAA Election OTP code is: {otp_code}\n\n"
+        f"This code expires in 5 minutes. Do not share it with anyone.",
+    )
+    msg["Subject"] = "LAA Election — Your Secure OTP"
+    msg["From"] = f"LAA Electoral Commission <{sender_email}>"
+    msg["To"] = receiver_email
 
-        return {
-            "status": "success",
-            "message": "OTP sent successfully.",
-            "email": masked_email
-        }
-    finally:
-        cursor.close()
-        conn.close()
+    try:
+        with smtplib.SMTP("smtp-relay.brevo.com", 587, timeout=10) as server:
+            server.starttls()
+            server.login(sender_email, smtp_key)
+            server.send_message(msg)
+        print(f"[Brevo] OTP sent to {receiver_email}")
+    except Exception as e:
+        print(f"[Brevo Error] {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to send OTP email. Please try again."
+        )
+
+
+# ---------------------------------------------------------------------------
+# Helper
+# ---------------------------------------------------------------------------
+
+def mask_email(email: str) -> str:
+    parts = email.split("@")
+    local = parts[0]
+    if len(local) > 2:
+        return f"{local[0]}{'*' * (len(local) - 2)}{local[-1]}@{parts[1]}"
+    return email
+
+
+# ---------------------------------------------------------------------------
+# Routes — OTP
+# ---------------------------------------------------------------------------
+
+@app.post("/api/request-otp")
+def request_otp(payload: OTPRequest, conn=Depends(get_db)):
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            "SELECT email FROM Voters WHERE matric_number = %s",
+            (payload.matric_number,)
+        )
+        voter = cur.fetchone()
+
+    if not voter:
+        raise HTTPException(status_code=404, detail="Matriculation number not found.")
+
+    email = voter["email"]
+    otp_code = str(random.SystemRandom().randint(100000, 999999))
+    expires_at = datetime.now() + timedelta(minutes=5)
+
+    with conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM OTP_Sessions WHERE matric_number = %s",
+            (payload.matric_number,)
+        )
+        cur.execute(
+            "INSERT INTO OTP_Sessions (matric_number, otp_code, expires_at) VALUES (%s, %s, %s)",
+            (payload.matric_number, otp_code, expires_at),
+        )
+    conn.commit()
+
+    # Send email — raises HTTPException if it fails
+    send_otp_email(email, otp_code)
+
+    return {
+        "status": "success",
+        "message": "OTP sent successfully.",
+        "email": mask_email(email),
+    }
+
 
 @app.post("/api/verify-otp")
-def verify_otp(payload: OTPVerify):
-    conn = get_db()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
-    try:
-        cursor.execute(
+def verify_otp(payload: OTPVerify, conn=Depends(get_db)):
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
             "SELECT expires_at FROM OTP_Sessions WHERE matric_number = %s AND otp_code = %s",
-            (payload.matric_number, payload.otp_code)
+            (payload.matric_number, payload.otp_code),
         )
-        session = cursor.fetchone()
+        session = cur.fetchone()
 
-        if not session:
-            raise HTTPException(status_code=401, detail="Invalid OTP code.")
+    if not session:
+        raise HTTPException(status_code=401, detail="Invalid OTP code.")
 
-        expires_at = session["expires_at"]
-        if datetime.now() > expires_at:
-            cursor.execute("DELETE FROM OTP_Sessions WHERE matric_number = %s", (payload.matric_number,))
-            conn.commit()
-            raise HTTPException(status_code=401, detail="OTP code expired.")
-
-        cursor.execute("DELETE FROM OTP_Sessions WHERE matric_number = %s", (payload.matric_number,))
-        cursor.execute("SELECT name, matric_number, has_voted FROM Voters WHERE matric_number = %s", (payload.matric_number,))
-        voter = cursor.fetchone()
-
-        has_voted = bool(voter["has_voted"])
-        response = {
-            "status": "success",
-            "user": {"name": voter["name"], "matric": voter["matric_number"]},
-            "hasVoted": has_voted
-        }
-
-        if has_voted:
-            cursor.execute("SELECT * FROM Ballots WHERE matric_number = %s", (payload.matric_number,))
-            ballot = cursor.fetchone()
-            if ballot:
-                user_ballot = dict(ballot)
-                del user_ballot["matric_number"]
-                response["userBallot"] = {
-                    "President": user_ballot.get("president"),
-                    "Vice President": user_ballot.get("vice_president"),
-                    "Speaker": user_ballot.get("speaker"),
-                    "Treasurer": user_ballot.get("treasurer"),
-                    "General Secretary": user_ballot.get("general_secretary"),
-                    "Coordinator": user_ballot.get("coordinator")
-                }
-
+    if datetime.now() > session["expires_at"]:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM OTP_Sessions WHERE matric_number = %s",
+                (payload.matric_number,)
+            )
         conn.commit()
-        return response
-    finally:
-        cursor.close()
-        conn.close()
+        raise HTTPException(status_code=401, detail="OTP code has expired.")
+
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            "DELETE FROM OTP_Sessions WHERE matric_number = %s",
+            (payload.matric_number,)
+        )
+        cur.execute(
+            "SELECT name, matric_number, has_voted FROM Voters WHERE matric_number = %s",
+            (payload.matric_number,),
+        )
+        voter = cur.fetchone()
+
+    conn.commit()
+
+    has_voted = bool(voter["has_voted"])
+    response = {
+        "status": "success",
+        "user": {"name": voter["name"], "matric": voter["matric_number"]},
+        "hasVoted": has_voted,
+    }
+
+    if has_voted:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT * FROM Ballots WHERE matric_number = %s",
+                (payload.matric_number,)
+            )
+            ballot = cur.fetchone()
+
+        if ballot:
+            b = dict(ballot)
+            b.pop("matric_number", None)
+            response["userBallot"] = {
+                "President":        b.get("president"),
+                "Vice President":   b.get("vice_president"),
+                "Speaker":          b.get("speaker"),
+                "Treasurer":        b.get("treasurer"),
+                "General Secretary": b.get("general_secretary"),
+                "Coordinator":      b.get("coordinator"),
+            }
+
+    return response
+
+
+# ---------------------------------------------------------------------------
+# Routes — Voting
+# ---------------------------------------------------------------------------
 
 @app.post("/api/vote")
-def cast_vote(payload: VotePayload):
-    conn = get_db()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+def cast_vote(payload: VotePayload, conn=Depends(get_db)):
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("SELECT election_open FROM System_Settings WHERE id = 1")
+        settings = cur.fetchone()
+
+    if not settings or not bool(settings["election_open"]):
+        raise HTTPException(status_code=403, detail="The election is currently closed.")
+
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            "SELECT has_voted FROM Voters WHERE matric_number = %s",
+            (payload.matric_number,)
+        )
+        voter = cur.fetchone()
+
+    if not voter:
+        raise HTTPException(status_code=404, detail="Voter not found.")
+
+    if bool(voter["has_voted"]):
+        raise HTTPException(status_code=403, detail="You have already cast your ballot.")
+
+    c = payload.choices
     try:
-        cursor.execute("SELECT election_open FROM System_Settings WHERE id = 1")
-        settings = cursor.fetchone()
-        if not settings or not bool(settings["election_open"]):
-            raise HTTPException(status_code=403, detail="The election is currently closed.")
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO Ballots
+                (matric_number, president, vice_president, speaker,
+                 treasurer, general_secretary, coordinator)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    payload.matric_number,
+                    c.get("President"),
+                    c.get("Vice President"),
+                    c.get("Speaker"),
+                    c.get("Treasurer"),
+                    c.get("General Secretary"),
+                    c.get("Coordinator"),
+                ),
+            )
+            cur.execute(
+                "UPDATE Voters SET has_voted = TRUE WHERE matric_number = %s",
+                (payload.matric_number,),
+            )
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        print(f"[Vote Error] {e}")
+        raise HTTPException(status_code=500, detail="Failed to record vote. Please try again.")
 
-        cursor.execute("SELECT has_voted FROM Voters WHERE matric_number = %s", (payload.matric_number,))
-        voter = cursor.fetchone()
+    return {"status": "success", "message": "Vote successfully cast."}
 
-        if not voter:
-            raise HTTPException(status_code=404, detail="Voter not found.")
 
-        if bool(voter["has_voted"]):
-            raise HTTPException(status_code=403, detail="Voter has already cast their ballot.")
-
-        choices = payload.choices
-        try:
-            cursor.execute('''
-                           INSERT INTO Ballots (
-                               matric_number, president, vice_president, speaker,
-                               treasurer, general_secretary, coordinator
-                           ) VALUES (%s, %s, %s, %s, %s, %s, %s)
-                           ''', (
-                               payload.matric_number,
-                               choices.get("President"),
-                               choices.get("Vice President"),
-                               choices.get("Speaker"),
-                               choices.get("Treasurer"),
-                               choices.get("General Secretary"),
-                               choices.get("Coordinator")
-                           ))
-
-            cursor.execute("UPDATE Voters SET has_voted = TRUE WHERE matric_number = %s", (payload.matric_number,))
-            conn.commit()
-        except Exception as e:
-            print(f"Vote Error: {e}")
-            conn.rollback()
-            raise HTTPException(status_code=500, detail="Database write error.")
-
-        return {"status": "success", "message": "Vote successfully cast."}
-    finally:
-        cursor.close()
-        conn.close()
+# ---------------------------------------------------------------------------
+# Routes — Results & Admin
+# ---------------------------------------------------------------------------
 
 @app.get("/api/results/turnout")
-def get_turnout():
-    conn = get_db()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
-    try:
-        cursor.execute("SELECT COUNT(*) as count FROM Voters")
-        total_eligible = cursor.fetchone()["count"]
+def get_turnout(conn=Depends(get_db)):
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("SELECT COUNT(*) as count FROM Voters")
+        total = cur.fetchone()["count"]
 
-        cursor.execute("SELECT COUNT(*) as count FROM Voters WHERE has_voted = TRUE")
-        votes_cast = cursor.fetchone()["count"]
+        cur.execute("SELECT COUNT(*) as count FROM Voters WHERE has_voted = TRUE")
+        voted = cur.fetchone()["count"]
 
-        percentage = 0
-        if total_eligible > 0:
-            percentage = round((votes_cast / total_eligible) * 100)
+    percentage = round((voted / total) * 100) if total > 0 else 0
+    return {
+        "status": "success",
+        "total_eligible": total,
+        "votes_cast": voted,
+        "turnout_percentage": percentage,
+    }
 
-        return {
-            "status": "success",
-            "total_eligible": total_eligible,
-            "votes_cast": votes_cast,
-            "turnout_percentage": percentage
-        }
-    finally:
-        cursor.close()
-        conn.close()
 
 @app.get("/api/admin/tally")
-def get_vote_tally():
-    conn = get_db()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
-    try:
-        positions = [
-            "president", "vice_president", "speaker",
-            "treasurer", "general_secretary", "coordinator"
-        ]
+def get_vote_tally(conn=Depends(get_db)):
+    positions = [
+        "president", "vice_president", "speaker",
+        "treasurer", "general_secretary", "coordinator",
+    ]
+    results = {}
 
-        results = {}
-
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
         for pos in positions:
-            cursor.execute(f"SELECT {pos}, COUNT(*) as votes FROM Ballots WHERE {pos} IS NOT NULL AND {pos} != '' GROUP BY {pos}")
-            pos_results = cursor.fetchall()
-            results[pos] = [{"candidate_id": row[pos], "votes": row["votes"]} for row in pos_results]
+            cur.execute(
+                f"SELECT {pos}, COUNT(*) as votes FROM Ballots "
+                f"WHERE {pos} IS NOT NULL AND {pos} != '' GROUP BY {pos}",
+            )
+            results[pos] = [
+                {"candidate_id": row[pos], "votes": row["votes"]}
+                for row in cur.fetchall()
+            ]
 
-        return {"status": "success", "data": results}
-    finally:
-        cursor.close()
-        conn.close()
+    return {"status": "success", "data": results}
+
 
 @app.get("/api/admin/status")
-def get_status():
-    conn = get_db()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
-    try:
-        cursor.execute("SELECT election_open FROM System_Settings WHERE id = 1")
-        settings = cursor.fetchone()
-        return {"status": "success", "election_open": bool(settings["election_open"]) if settings else True}
-    finally:
-        cursor.close()
-        conn.close()
+def get_status(conn=Depends(get_db)):
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("SELECT election_open FROM System_Settings WHERE id = 1")
+        settings = cur.fetchone()
+
+    return {
+        "status": "success",
+        "election_open": bool(settings["election_open"]) if settings else True,
+    }
+
 
 @app.post("/api/admin/status")
-def update_status(payload: StatusUpdate):
-    conn = get_db()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
-    try:
-        cursor.execute("UPDATE System_Settings SET election_open = %s WHERE id = 1", (payload.election_open,))
-        conn.commit()
-        return {"status": "success", "election_open": payload.election_open}
-    finally:
-        cursor.close()
-        conn.close()
+def update_status(payload: StatusUpdate, conn=Depends(get_db)):
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE System_Settings SET election_open = %s WHERE id = 1",
+            (payload.election_open,),
+        )
+    conn.commit()
+    return {"status": "success", "election_open": payload.election_open}
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     import uvicorn
