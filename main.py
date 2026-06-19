@@ -1,7 +1,6 @@
 import os
 import random
-import smtplib
-from email.mime.text import MIMEText
+import httpx
 from datetime import datetime, timedelta
 from typing import Dict
 
@@ -132,7 +131,8 @@ class StatusUpdate(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Email — Brevo SMTP
+# Email — Brevo HTTP API (Render free tier blocks outbound SMTP entirely,
+# so we use Brevo's HTTPS API instead of smtplib)
 # ---------------------------------------------------------------------------
 
 def _otp_html(otp_code: str) -> str:
@@ -156,34 +156,40 @@ def _otp_html(otp_code: str) -> str:
 
 
 def send_otp_email(receiver_email: str, otp_code: str):
-    """Send OTP via Brevo SMTP. Raises HTTPException on failure."""
-    sender_email = os.getenv("BREVO_EMAIL")
-    smtp_key = os.getenv("BREVO_SMTP_KEY")
+    """Send OTP via Brevo's HTTP API (port 443). Raises HTTPException on failure."""
+    api_key = os.getenv("BREVO_API_KEY")
+    sender_email = os.getenv("BREVO_SENDER_EMAIL")
 
-    if not sender_email or not smtp_key:
-        print("[Brevo Error] BREVO_EMAIL or BREVO_SMTP_KEY not set.")
+    if not api_key or not sender_email:
+        print("[Brevo Error] BREVO_API_KEY or BREVO_SENDER_EMAIL not set.")
         raise HTTPException(
             status_code=500,
             detail="Email service is not configured. Contact the administrator."
         )
 
-    msg = MIMEText(
-        f"Hello,\n\n"
-        f"Your LAA Election OTP code is: {otp_code}\n\n"
-        f"This code expires in 5 minutes. Do not share it with anyone.",
-    )
-    msg["Subject"] = "LAA Election — Your Secure OTP"
-    msg["From"] = f"LAA Electoral Commission <{sender_email}>"
-    msg["To"] = receiver_email
-
     try:
-        with smtplib.SMTP("smtp-relay.brevo.com", 587, timeout=10) as server:
-            server.starttls()
-            server.login(sender_email, smtp_key)
-            server.send_message(msg)
-        print(f"[Brevo] OTP sent to {receiver_email}")
+        response = httpx.post(
+            "https://api.brevo.com/v3/smtp/email",
+            headers={
+                "accept": "application/json",
+                "api-key": api_key,
+                "content-type": "application/json",
+            },
+            json={
+                "sender": {
+                    "name": "LAA Electoral Commission",
+                    "email": sender_email,
+                },
+                "to": [{"email": receiver_email}],
+                "subject": "LAA Election — Your Secure OTP",
+                "htmlContent": _otp_html(otp_code),
+            },
+            timeout=10,
+        )
+        response.raise_for_status()
+        print(f"[Brevo API] OTP sent to {receiver_email}")
     except Exception as e:
-        print(f"[Brevo Error] {e}")
+        print(f"[Brevo API Error] {e}")
         raise HTTPException(
             status_code=500,
             detail="Failed to send OTP email. Please try again."
