@@ -184,11 +184,11 @@ def send_otp_email(receiver_email: str, otp_code: str):
             },
             json={
                 "sender": {
-                    "name": "LAA Electoral Commission",
+                    "name": "USSA Electoral Commission",
                     "email": sender_email,
                 },
                 "to": [{"email": receiver_email}],
-                "subject": "LAA Election — Your Secure OTP",
+                "subject": "USSA Election — Your Secure OTP",
                 "htmlContent": _otp_html(otp_code),
             },
             timeout=10,
