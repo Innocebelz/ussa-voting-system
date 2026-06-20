@@ -18,7 +18,7 @@ load_dotenv()
 # App Setup
 # ---------------------------------------------------------------------------
 
-app = FastAPI(title="LAA Voting API")
+app = FastAPI(title="USSA Voting API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -138,9 +138,9 @@ class StatusUpdate(BaseModel):
 def _otp_html(otp_code: str) -> str:
     return f"""
         <div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;">
-            <h2 style="color:#1a1a2e;">LAA Electoral Commission</h2>
+            <h2 style="color:#1a1a2e;">U.S.S.A Electoral Commission</h2>
             <p>Hello,</p>
-            <p>Your one-time password (OTP) for the LAA Election is:</p>
+            <p>Your one-time password (OTP) for the U.S.S.A Election is:</p>
             <div style="font-size:2rem;font-weight:bold;letter-spacing:8px;
                         color:#1a1a2e;text-align:center;padding:16px 0;">
                 {otp_code}
