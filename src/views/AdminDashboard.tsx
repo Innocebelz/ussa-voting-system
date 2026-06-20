@@ -12,6 +12,9 @@ interface TallyData {
     [position: string]: { candidate_id: string; votes: number }[];
 }
 
+// FIX: Point directly to your live Render backend
+const BACKEND_URL = 'https://laa-voting-system.onrender.com';
+
 const AdminDashboard: React.FC = () => {
     const [turnout, setTurnout] = useState<TurnoutData | null>(null);
     const [tally, setTally] = useState<TallyData | null>(null);
@@ -20,26 +23,29 @@ const AdminDashboard: React.FC = () => {
     const [actionLoading, setActionLoading] = useState(false);
     const navigate = useNavigate();
 
-    const backendUrl = `http://${window.location.hostname}:8000`;
-
     useEffect(() => {
         const fetchAdminData = async () => {
             try {
+                // Fetching from Render instead of localhost/Vercel
                 const [turnoutRes, tallyRes, statusRes] = await Promise.all([
-                    fetch(`${backendUrl}/api/results/turnout`),
-                    fetch(`${backendUrl}/api/admin/tally`),
-                    fetch(`${backendUrl}/api/admin/status`)
+                    fetch(`${BACKEND_URL}/api/results/turnout`),
+                    fetch(`${BACKEND_URL}/api/admin/tally`),
+                    fetch(`${BACKEND_URL}/api/admin/status`)
                 ]);
 
-                const turnoutJson = await turnoutRes.json();
-                const tallyJson = await tallyRes.json();
-                const statusJson = await statusRes.json();
+                if (turnoutRes.ok && tallyRes.ok && statusRes.ok) {
+                    const turnoutJson = await turnoutRes.json();
+                    const tallyJson = await tallyRes.json();
+                    const statusJson = await statusRes.json();
 
-                if (turnoutJson.status === 'success') setTurnout(turnoutJson);
-                if (tallyJson.status === 'success') setTally(tallyJson.data);
-                if (statusJson.status === 'success') setIsElectionOpen(statusJson.election_open);
+                    if (turnoutJson.status === 'success') setTurnout(turnoutJson);
+                    if (tallyJson.status === 'success') setTally(tallyJson.data);
+                    if (statusJson.status === 'success') setIsElectionOpen(statusJson.election_open);
+                } else {
+                    console.error("One or more backend endpoints returned an error.");
+                }
             } catch (error) {
-                console.error("Failed to fetch admin data:", error);
+                console.error("Failed to connect to Render backend:", error);
             } finally {
                 setLoading(false);
             }
@@ -48,7 +54,7 @@ const AdminDashboard: React.FC = () => {
         fetchAdminData();
         const interval = setInterval(fetchAdminData, 10000);
         return () => clearInterval(interval);
-    }, [backendUrl]);
+    }, []);
 
     const getCandidateName = (positionKey: string, candidateId: string) => {
         const formattedPosition = positionKey.replace('_', ' ').toLowerCase();
@@ -64,7 +70,7 @@ const AdminDashboard: React.FC = () => {
 
         setActionLoading(true);
         try {
-            const res = await fetch(`${backendUrl}/api/admin/status`, {
+            const res = await fetch(`${BACKEND_URL}/api/admin/status`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ election_open: !isElectionOpen })
@@ -123,7 +129,7 @@ const AdminDashboard: React.FC = () => {
                 </button>
             </div>
 
-            {/* NEW: Admin Controls Panel */}
+            {/* Admin Controls Panel */}
             <div className="bg-white p-4 rounded-xl border-2 border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-4 mb-8">
                 <div className="flex items-center space-x-4">
                     <div className={`w-3 h-3 rounded-full ${isElectionOpen ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
