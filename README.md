@@ -1,6 +1,6 @@
-# LAA Voting System
+# U.S.S.A Voting System
 
-A secure, mobile-responsive electronic voting portal built for the LUO Association in Algeria (LAA). This system provides authenticated, one-time voting capabilities using email-based OTP (One-Time Password) verification.
+A secure, mobile-responsive electronic voting portal built for the Uganda Students' Association In Algeria (U.S.S.A). This system provides authenticated, one-time voting capabilities using email-based OTP (One-Time Password) verification.
 
 ## System Architecture
 

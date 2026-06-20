@@ -41,7 +41,7 @@ const Layout: React.FC = () => {
                     </div>
 
                     <div>
-                        <h1 className="text-2xl font-bold tracking-tight uppercase">LUO ASSOCIATION IN ALGERIA (LAA)</h1>
+                        <h1 className="text-2xl font-bold tracking-tight uppercase">UGANDA STUDENTS' ASSOCIATION IN ALGERIA (U.S.S.A)</h1>
                         <p className="text-blue-300 text-xs font-medium tracking-widest uppercase">Student Association Portal</p>
                     </div>
                 </div>
