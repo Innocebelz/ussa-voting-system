@@ -157,8 +157,15 @@ def _otp_html(otp_code: str) -> str:
 
 def send_otp_email(receiver_email: str, otp_code: str):
     """Send OTP via Brevo's HTTP API (port 443). Raises HTTPException on failure."""
-    api_key = os.getenv("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")
-    sender_email = os.getenv("enositbale@gmail.com")
+    api_key = os.getenv("BREVO_API_KEY")
+    sender_email = os.getenv("BREVO_SENDER_EMAIL")
+
+    # TEMP DEBUG — remove after confirming the key loads correctly
+    if api_key:
+        print(f"[DEBUG] BREVO_API_KEY length={len(api_key)} starts='{api_key[:10]}' ends='{api_key[-6:]}'")
+    else:
+        print("[DEBUG] BREVO_API_KEY is None/empty")
+    print(f"[DEBUG] BREVO_SENDER_EMAIL={sender_email!r}")
 
     if not api_key or not sender_email:
         print("[Brevo Error] BREVO_API_KEY or BREVO_SENDER_EMAIL not set.")
