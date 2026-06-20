@@ -68,10 +68,36 @@ const Layout: React.FC = () => {
                 <Outlet />
             </main>
 
-            <footer className="bg-slate-200 h-10 flex items-center px-8 border-t border-slate-300 shrink-0">
-                <div className="flex space-x-4 items-center">
+            <footer className="bg-slate-200 h-10 flex items-center justify-between px-8 border-t border-slate-300 shrink-0 select-none">
+                {/* Left: Association Info */}
+                <div className="text-[10px] font-medium text-slate-500 tracking-wide">
+                    © 2026 USAA Electoral Committee. All Rights Reserved.
+                </div>
+
+                {/* Center: Social Media Links */}
+                <div className="flex items-center space-x-4">
+                    {/* Facebook */}
+                    <a href="https://www.facebook.com/share/18qWFZKpMK/" target="_blank" rel="noreferrer" title="USAA Facebook" className="text-slate-400 hover:text-blue-600 transition-colors duration-200">
+                        <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                            <path d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z" />
+                        </svg>
+                    </a>
+
+                    {/* Instagram */}
+                    <a href="https://www.instagram.com/ugandan_students_in_algeria?igsh=MWN4cmZrZjU1eXN6dA==" target="_blank" rel="noreferrer" title="USAA Instagram" className="text-slate-400 hover:text-pink-600 transition-colors duration-200">
+                        <svg className="w-4 h-4 fill-none stroke-current stroke-2" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+                            <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+                            <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+                        </svg>
+                    </a>
+                    
+                </div>
+
+                {/* Right: Existing System Status */}
+                <div className="flex space-x-2 items-center">
                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">System Status:</span>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-1.5">
                         <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
                         <span className="text-[10px] text-slate-600 font-mono tracking-tight">NODES_SYNC_OK_12ms</span>
                     </div>
