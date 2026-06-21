@@ -1,4 +1,6 @@
-export const ELECTION_DATA = [
+import { ElectionCategory } from './types';
+
+export const ELECTION_DATA: ElectionCategory[] = [
   {
     position: 'President',
     unopposed: false,
