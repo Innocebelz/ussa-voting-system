@@ -1,79 +1,126 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Loader2 } from 'lucide-react';
+import { Loader2, GraduationCap } from 'lucide-react';
 
 const Login: React.FC = () => {
-  const [matNum, setMatNum] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [matNum, setMatNum]     = useState('');
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState('');
+  const [visible, setVisible]   = useState(false);   // fade-in on mount
   const { login } = useAuth();
-  const navigate = useNavigate();
+  const navigate  = useNavigate();
+
+  // Trigger fade-in as soon as the component mounts
+  useEffect(() => {
+    const t = setTimeout(() => setVisible(true), 30);
+    return () => clearTimeout(t);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!matNum.trim()) {
-      setError('Matriculation Number is required.');
+    const trimmed = matNum.trim().toUpperCase();
+    if (!trimmed) {
+      setError('Matriculation number is required.');
       return;
     }
 
     try {
       setError('');
       setLoading(true);
-      await login(matNum);
+      await login(trimmed);
       navigate('/verify');
-    } catch (err) {
-      setError('Failed to request OTP. Please try again.');
+    } catch (err: any) {
+      setError(err.message || 'Matriculation number not found. Please check and try again.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-      <div className="w-full max-w-sm mx-auto bg-white p-8 rounded-xl shadow-sm border-2 border-slate-200 self-center">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-slate-900 uppercase tracking-tight">Identity Verification</h1>
-          <p className="text-slate-500 mt-2 text-sm font-medium">Enter your matriculation number to receive a one-time password securely.</p>
-        </div>
+      <div
+          className={`w-full max-w-sm mx-auto self-center transition-all duration-500 ${
+              visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+          }`}
+      >
+        {/* ── Card ─────────────────────────────────────────────────────── */}
+        <div className="bg-white rounded-2xl shadow-md border-2 border-zinc-200 overflow-hidden">
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label htmlFor="matNum" className="block text-xs font-bold uppercase tracking-wider text-slate-900 mb-2">
-              Matriculation Number
-            </label>
-            <input
-                type="text"
-                id="matNum"
-                className={`block w-full rounded-md border-2 py-3 px-4 text-slate-900 shadow-sm ${
-                    error ? 'border-red-500 focus:border-red-500' : 'border-slate-200 focus:border-blue-600 outline-none'
-                } placeholder:text-slate-400 sm:text-sm font-mono sm:leading-6 transition-colors`}
-                placeholder="e.g. 1912345"
-                value={matNum}
-                onChange={(e) => setMatNum(e.target.value)}
-                disabled={loading}
-            />
-            {error && <p className="mt-2 text-sm text-red-600 font-medium">{error}</p>}
+          {/* Gold top bar — mirrors the header border */}
+          <div className="h-1.5 bg-yellow-500 w-full" />
+
+          <div className="p-8">
+
+            {/* Icon + heading */}
+            <div className="text-center mb-8">
+              <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-zinc-900 border-2 border-yellow-500 mb-4">
+                <GraduationCap className="w-7 h-7 text-yellow-400" />
+              </div>
+              <h1 className="text-2xl font-black text-zinc-900 uppercase tracking-tight">
+                Voter Login
+              </h1>
+              <p className="text-zinc-500 mt-2 text-sm font-medium">
+                Enter your matriculation number to receive a one-time verification code.
+              </p>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div>
+                <label
+                    htmlFor="matNum"
+                    className="block text-xs font-black uppercase tracking-widest text-zinc-800 mb-2"
+                >
+                  Matriculation Number
+                </label>
+                <input
+                    type="text"
+                    id="matNum"
+                    autoFocus
+                    autoComplete="off"
+                    spellCheck={false}
+                    className={`block w-full rounded-lg border-2 py-3 px-4 text-zinc-900 font-mono text-sm shadow-sm outline-none transition-all duration-200 uppercase ${
+                        error
+                            ? 'border-red-400 bg-red-50 focus:border-red-500'
+                            : 'border-zinc-200 bg-zinc-50 focus:border-yellow-500 focus:bg-white'
+                    } placeholder:text-zinc-400 placeholder:normal-case placeholder:font-sans`}
+                    placeholder="e.g. 8UGA12345"
+                    value={matNum}
+                    onChange={(e) => {
+                      setMatNum(e.target.value);
+                      if (error) setError('');   // clear error as they type
+                    }}
+                    disabled={loading}
+                />
+
+                {/* Error message — slides in */}
+                <div className={`overflow-hidden transition-all duration-300 ${error ? 'max-h-10 mt-2' : 'max-h-0'}`}>
+                  <p className="text-sm text-red-600 font-semibold">{error}</p>
+                </div>
+              </div>
+
+              <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full flex justify-center items-center rounded-xl bg-zinc-900 px-3 py-4 text-sm font-black text-white shadow-lg hover:bg-zinc-800 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150 border-b-4 border-zinc-700 active:border-b-0 uppercase tracking-widest"
+              >
+                {loading ? (
+                    <>
+                      <Loader2 className="animate-spin -ml-1 mr-2 h-5 w-5 text-yellow-400" />
+                      <span className="text-yellow-400">Sending Code...</span>
+                    </>
+                ) : (
+                    'Request Verification Code'
+                )}
+              </button>
+            </form>
           </div>
-
-          <button
-              type="submit"
-              disabled={loading}
-              className="w-full flex justify-center items-center rounded-lg bg-blue-600 px-3 py-4 text-sm font-bold text-white shadow-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors border-b-4 border-blue-800 active:border-b-0 uppercase tracking-wide"
-          >
-            {loading ? (
-                <>
-                  <Loader2 className="animate-spin -ml-1 mr-2 h-5 w-5" />
-                  Requesting...
-                </>
-            ) : (
-                'Request OTP'
-            )}
-          </button>
-        </form>
-
-        <div className="mt-8 text-center text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-          By requesting an OTP, you agree to the USSA election guidelines.
         </div>
+
+        {/* Fine print */}
+        <p className="mt-5 text-center text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+          By continuing, you agree to the USSA election guidelines.
+        </p>
       </div>
   );
 };
