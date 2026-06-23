@@ -4,6 +4,29 @@ import { User } from '../types';
 // --- YOUR LIVE RENDER BACKEND URL ---
 const API_BASE_URL = 'https://laa-voting-system.onrender.com';
 
+// ── Session expiry ────────────────────────────────────────────────────────────
+// Voter sessions expire after 12 hours. After that, the stored auth state is
+// wiped on the next page load so nobody gets stuck in a stale voting or
+// "already voted" state from a previous day / previous election.
+const SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000;   // 12 hours in milliseconds
+const AUTH_KEYS = ['laa_user', 'laa_matric', 'laa_email', 'laa_vote_token', 'laa_session_at'];
+
+const clearAuthStorage = () => AUTH_KEYS.forEach(k => localStorage.removeItem(k));
+
+// Runs synchronously at module load — before any useState initializer reads storage.
+// If there is no timestamp or it's older than SESSION_MAX_AGE_MS, wipe everything.
+const purgeStaleSession = () => {
+  try {
+    const raw = localStorage.getItem('laa_session_at');
+    const isStale = !raw || (Date.now() - parseInt(raw, 10)) > SESSION_MAX_AGE_MS;
+    if (isStale) clearAuthStorage();
+  } catch {
+    // localStorage blocked (e.g. Safari private mode) — nothing to clear
+  }
+};
+purgeStaleSession();   // ← runs once when this module is first imported
+// ─────────────────────────────────────────────────────────────────────────────
+
 interface AuthContextType {
   user: User | null;
   matNumber: string | null;
@@ -76,6 +99,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     setMatNumber(matNum);
     setMaskedEmail(data.email);
+    // Start the session clock — the 12-hour expiry is measured from here.
+    localStorage.setItem('laa_session_at', String(Date.now()));
   };
 
   const verifyOtp = async (otp: string) => {
@@ -142,11 +167,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setMatNumber(null);
     setMaskedEmail(null);
     setVoteToken(null);
-    // Explicitly wipe storage on manual logout
-    localStorage.removeItem('laa_user');
-    localStorage.removeItem('laa_matric');
-    localStorage.removeItem('laa_email');
-    localStorage.removeItem('laa_vote_token');
+    clearAuthStorage();   // wipes all laa_* keys including laa_session_at
   };
 
   return (
