@@ -6,11 +6,12 @@ import { ELECTION_DATA } from '../constants';
 
 const VotingBooth: React.FC = () => {
     const [selections, setSelections]     = useState<Record<string, string>>({});
-    const [expanded, setExpanded]         = useState<Record<string, boolean>>({}); // manifesto open state per candidate
+    const [expanded, setExpanded]         = useState<Record<string, boolean>>({});
     const [showConfirm, setShowConfirm]   = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submitError, setSubmitError]   = useState('');
     const [visible, setVisible]           = useState(false);
-    const [justSelected, setJustSelected] = useState<string | null>(null); // pulse on select
+    const [justSelected, setJustSelected] = useState<string | null>(null);
     const { user, vote } = useAuth();
     const navigate = useNavigate();
     const confirmRef = useRef<HTMLDivElement>(null);
@@ -52,12 +53,23 @@ const VotingBooth: React.FC = () => {
 
     const handleVoteSubmit = async () => {
         try {
+            setSubmitError('');
             setIsSubmitting(true);
             await vote(selections);
-            setShowConfirm(false);
+            // Navigate first, then close modal — avoids a flash where the modal
+            // briefly re-renders after hasVoted becomes true in the route guard
             navigate('/results');
-        } catch (error) {
-            console.error(error);
+            setShowConfirm(false);
+        } catch (error: any) {
+            const message: string = error?.message || 'Something went wrong. Please try again.';
+            console.error('[VotingBooth] vote failed:', message);
+            // Vote session expired — send them back to re-verify OTP
+            if (message.toLowerCase().includes('session') || message.toLowerCase().includes('expired') || message.toLowerCase().includes('401')) {
+                setShowConfirm(false);
+                navigate('/verify');
+            } else {
+                setSubmitError(message);
+            }
             setIsSubmitting(false);
         }
     };
@@ -273,6 +285,14 @@ const VotingBooth: React.FC = () => {
                             <h3 className="text-lg font-black text-zinc-900 text-center mb-2 uppercase tracking-tight">
                                 Confirm Your Vote
                             </h3>
+
+                            {/* Error box — at the top so it's always visible on mobile */}
+                            {submitError && (
+                                <div className="bg-red-50 border-2 border-red-300 rounded-xl px-4 py-3 mb-4 text-sm text-red-700 font-bold text-center">
+                                    ⚠️ {submitError}
+                                </div>
+                            )}
+
                             <p className="text-sm text-zinc-500 text-center mb-1 font-medium">
                                 You are about to submit your ballot for{' '}
                                 <strong className="text-zinc-800">{totalPositions} positions</strong>.
@@ -322,7 +342,10 @@ const VotingBooth: React.FC = () => {
                                     )}
                                 </button>
                                 <button
-                                    onClick={() => setShowConfirm(false)}
+                                    onClick={() => {
+                                        setShowConfirm(false);
+                                        setSubmitError('');
+                                    }}
                                     disabled={isSubmitting}
                                     className="w-full bg-white text-zinc-600 border-2 border-zinc-200 rounded-xl py-3.5 font-black hover:bg-zinc-50 hover:border-zinc-300 disabled:opacity-50 transition-all uppercase text-sm tracking-widest"
                                 >
