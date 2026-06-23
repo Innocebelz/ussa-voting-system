@@ -28,7 +28,7 @@ app = FastAPI(title="USSA Voting API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://laa-voting-system.vercel.app",
+        "https://ussa-voting-system.vercel.app",
         "http://localhost:5173",
         "http://localhost:3000",
     ],
