@@ -386,7 +386,11 @@ def send_confirmation_email(receiver_email: str, voter_name: str, ballot_id: str
     except Exception as e:
         # Non-fatal — the vote is already in the DB. Just log and move on.
         print(f"[Brevo] Confirmation email failed (non-fatal): {e}")
-    api_key = os.getenv("BREVO_API_KEY")
+
+
+def send_otp_email(receiver_email: str, otp_code: str):
+    """Send OTP via Brevo HTTP API. Raises HTTPException on failure."""
+    api_key      = os.getenv("BREVO_API_KEY")
     sender_email = os.getenv("BREVO_SENDER_EMAIL")
 
     if not api_key or not sender_email:
@@ -400,17 +404,17 @@ def send_confirmation_email(receiver_email: str, voter_name: str, ballot_id: str
         response = httpx.post(
             "https://api.brevo.com/v3/smtp/email",
             headers={
-                "accept": "application/json",
-                "api-key": api_key,
+                "accept":       "application/json",
+                "api-key":      api_key,
                 "content-type": "application/json",
             },
             json={
                 "sender": {
-                    "name": "USSA Electoral Commission",
+                    "name":  "USSA Electoral Commission",
                     "email": sender_email,
                 },
-                "to": [{"email": receiver_email}],
-                "subject": "USSA Election — Your Secure OTP",
+                "to":          [{"email": receiver_email}],
+                "subject":     "USSA Election — Your Secure OTP",
                 "htmlContent": _otp_html(otp_code),
             },
             timeout=10,
