@@ -138,7 +138,7 @@ const Results: React.FC = () => {
                       Your Ballot Receipt
                     </p>
                     <p className="text-[11px] text-zinc-500 font-medium mb-3 leading-relaxed">
-                      Save this reference number. After the election closes, you can use it to confirm your ballot was counted — without revealing how you voted.
+                      Save this reference number. After the election closes, you can use it to confirm your ballot was counted.
                     </p>
                     <div className="bg-zinc-50 border-2 border-zinc-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
                       <code className="text-xs font-mono font-bold text-zinc-700 break-all">
@@ -236,7 +236,7 @@ const Results: React.FC = () => {
           </div>
         </div>
 
-        {/* ── Your ballot summary ───────────────────────────────────────────── */}
+        {/* ── Ballot summary ───────────────────────────────────────────── */}
         <div className="bg-white rounded-2xl border-2 border-zinc-200 overflow-hidden shadow-sm">
           <div className="h-1.5 bg-yellow-500 w-full" />
           <div className="p-6">
