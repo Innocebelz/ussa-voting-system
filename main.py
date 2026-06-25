@@ -708,6 +708,82 @@ def get_turnout(conn=Depends(get_db)):
     }
 
 
+@app.get("/api/public/results")
+def get_public_results(conn=Depends(get_db)):
+    """
+    Returns the full tally + turnout ONLY after the election is closed.
+    While open, returns a status of 'in_progress' with no vote data.
+    This endpoint requires no authentication — it is intentionally public.
+    """
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("SELECT election_open FROM System_Settings WHERE id = 1")
+        settings = cur.fetchone()
+
+    election_open = bool(settings["election_open"]) if settings else True
+
+    if election_open:
+        return {
+            "status":  "in_progress",
+            "message": "The election is still in progress. Results will be published once voting closes.",
+        }
+
+    # Turnout
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("SELECT COUNT(*) as total FROM Voters")
+        total = cur.fetchone()["total"]
+        cur.execute("SELECT COUNT(*) as cast FROM Voters WHERE has_voted = TRUE")
+        cast = cur.fetchone()["cast"]
+
+    # Full tally per position
+    positions = [
+        "president", "male_vice_president", "female_vice_president",
+        "minister_of_finance", "minister_of_education",
+        "minister_of_information", "general_secretary",
+    ]
+    tally = {}
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        for pos in positions:
+            cur.execute(
+                f"SELECT {pos} as candidate_id, COUNT(*) as votes "
+                f"FROM Ballots WHERE {pos} IS NOT NULL AND {pos} != '' "
+                f"GROUP BY {pos} ORDER BY votes DESC",
+            )
+            tally[pos] = [
+                {"candidate_id": row["candidate_id"], "votes": row["votes"]}
+                for row in cur.fetchall()
+            ]
+
+    return {
+        "status": "closed",
+        "turnout": {
+            "total_eligible":     total,
+            "votes_cast":         cast,
+            "turnout_percentage": round((cast / total * 100)) if total > 0 else 0,
+        },
+        "results": tally,
+    }
+
+
+@app.get("/api/verify-ballot/{ballot_id}")
+def verify_ballot(ballot_id: str, conn=Depends(get_db)):
+    """
+    Checks whether a ballot with this UUID was recorded.
+    Returns ONLY a boolean — never reveals vote choices.
+    Anonymity is preserved: the Ballots table has no matric_number column.
+    """
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT ballot_id FROM Ballots WHERE ballot_id = %s::uuid",
+                (ballot_id.strip(),)
+            )
+            found = cur.fetchone()
+        return {"status": "success", "counted": found is not None}
+    except Exception:
+        # Invalid UUID format — treat as not found
+        return {"status": "success", "counted": False}
+
+
 @app.post("/api/admin/login")
 def admin_login(payload: AdminLoginRequest):
     if not ADMIN_PASSWORD:

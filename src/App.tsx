@@ -4,6 +4,7 @@
  */
 import AdminDashboard from './views/AdminDashboard';
 import AdminLogin from './views/AdminLogin';
+import PublicResults from './views/PublicResults';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import Layout from './components/Layout';
@@ -21,31 +22,33 @@ export default function App() {
           <Routes>
             <Route element={<Layout />}>
 
-              {/* Public/Guest Routes */}
+              {/* Fully public — no auth required */}
+              <Route path="/election-results" element={<PublicResults />} />
+
+              {/* Admin login — public but separate from voter login */}
+              <Route path="/admin/login" element={<AdminLogin />} />
+
+              {/* Guest-only routes */}
               <Route element={<GuestRoute />}>
                 <Route path="/login" element={<Login />} />
                 <Route path="/verify" element={<Verify />} />
               </Route>
 
-              {/* Voting Route - only accessible if authenticated and hasn't voted */}
+              {/* Voting route — authenticated and hasn't voted */}
               <Route element={<VotingRoute />}>
                 <Route path="/voting-booth" element={<VotingBooth />} />
               </Route>
 
-              {/* Protected Route - only accessible if authenticated */}
+              {/* Protected route — authenticated */}
               <Route element={<ProtectedRoute />}>
                 <Route path="/results" element={<Results />} />
               </Route>
 
-              {/* Admin Login - public, but separate from the voter login */}
-              <Route path="/admin/login" element={<AdminLogin />} />
-
-              {/* Admin Route - Election Control Center, requires an admin session */}
+              {/* Admin route — requires admin session */}
               <Route element={<AdminRoute />}>
                 <Route path="/admin" element={<AdminDashboard />} />
               </Route>
 
-              {/* Fallback to login */}
               <Route path="*" element={<Navigate to="/login" replace />} />
             </Route>
           </Routes>
