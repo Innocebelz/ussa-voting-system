@@ -163,10 +163,10 @@ def init_db():
         with conn.cursor() as cur:
             cur.execute("""
                         CREATE TABLE IF NOT EXISTS Voters (
-                                                              matric_number TEXT PRIMARY KEY,
-                                                              name          TEXT NOT NULL,
-                                                              email         TEXT NOT NULL,
-                                                              has_voted     BOOLEAN NOT NULL DEFAULT FALSE
+                                                              matric_number    TEXT PRIMARY KEY,
+                                                              name             TEXT NOT NULL,
+                                                              email            TEXT NOT NULL,
+                                                              has_voted        BOOLEAN NOT NULL DEFAULT FALSE
                         )
                         """)
 
@@ -223,7 +223,7 @@ def startup_event():
 # ---------------------------------------------------------------------------
 
 class OTPRequest(BaseModel):
-    matric_number: str
+    matric_number: str    # WhatsApp number is looked up from the DB, never accepted from the request
 
 
 class OTPVerify(BaseModel):
@@ -277,8 +277,115 @@ def _otp_html(otp_code: str) -> str:
     """
 
 
-def send_otp_email(receiver_email: str, otp_code: str):
-    """Send OTP via Brevo's HTTP API (port 443). Raises HTTPException on failure."""
+def _confirmation_html(voter_name: str, ballot_id: str) -> str:
+    return f"""
+        <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;
+                    border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
+
+            <!-- Gold header bar -->
+            <div style="background:#eab308;height:6px;width:100%;"></div>
+
+            <div style="padding:32px 32px 24px;">
+
+                <!-- Logo / title -->
+                <div style="text-align:center;margin-bottom:24px;">
+                    <h2 style="margin:0;color:#18181b;font-size:20px;
+                               letter-spacing:1px;text-transform:uppercase;">
+                        U.S.S.A Electoral Commission
+                    </h2>
+                    <p style="margin:4px 0 0;color:#eab308;font-size:11px;
+                              font-weight:bold;letter-spacing:2px;text-transform:uppercase;">
+                        'Unitè Triomphe Tout'
+                    </p>
+                </div>
+
+                <!-- Green confirmed badge -->
+                <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;
+                            padding:12px 16px;margin-bottom:24px;text-align:center;">
+                    <span style="color:#15803d;font-weight:bold;font-size:13px;">
+                        ✓ &nbsp; Your vote has been recorded
+                    </span>
+                </div>
+
+                <p style="color:#3f3f46;font-size:14px;margin:0 0 8px;">
+                    Hello <strong>{voter_name}</strong>,
+                </p>
+                <p style="color:#3f3f46;font-size:14px;margin:0 0 20px;line-height:1.6;">
+                    Your ballot has been successfully submitted for the
+                    <strong>U.S.S.A General Elections</strong>.
+                    Your vote is anonymous — it cannot be linked back to you by
+                    anyone, including the Electoral Commission.
+                </p>
+
+                <!-- Receipt box -->
+                <div style="background:#fafafa;border:2px solid #e4e4e7;border-radius:8px;
+                            padding:16px;margin-bottom:24px;">
+                    <p style="margin:0 0 6px;font-size:11px;font-weight:bold;
+                              color:#71717a;text-transform:uppercase;letter-spacing:1px;">
+                        Your Ballot Receipt
+                    </p>
+                    <p style="margin:0;font-family:monospace;font-size:13px;
+                              color:#18181b;word-break:break-all;font-weight:bold;">
+                        {ballot_id}
+                    </p>
+                    <p style="margin:10px 0 0;font-size:12px;color:#71717a;line-height:1.5;">
+                        Save this code. After the election closes, you can use it
+                        on the public verification page to confirm your ballot was
+                        included in the count.
+                    </p>
+                </div>
+
+                <hr style="border:none;border-top:1px solid #f0f0f0;margin:0 0 20px;">
+
+                <p style="color:#a1a1aa;font-size:12px;text-align:center;margin:0;">
+                    If you did not vote in this election, contact the Electoral Commission
+                    immediately at this email address.
+                </p>
+            </div>
+
+            <!-- Dark footer -->
+            <div style="background:#18181b;padding:16px 32px;text-align:center;">
+                <p style="margin:0;color:#71717a;font-size:11px;">
+                    © 2026 U.S.S.A Electoral Committee · Algeria
+                </p>
+            </div>
+        </div>
+    """
+
+
+def send_confirmation_email(receiver_email: str, voter_name: str, ballot_id: str):
+    """Send a voting confirmation email with ballot receipt. Non-fatal — logs on failure."""
+    api_key      = os.getenv("BREVO_API_KEY")
+    sender_email = os.getenv("BREVO_SENDER_EMAIL")
+
+    if not api_key or not sender_email:
+        print("[Brevo] Skipping confirmation email — API key not configured.")
+        return
+
+    try:
+        response = httpx.post(
+            "https://api.brevo.com/v3/smtp/email",
+            headers={
+                "accept":       "application/json",
+                "api-key":      api_key,
+                "content-type": "application/json",
+            },
+            json={
+                "sender": {
+                    "name":  "USSA Electoral Commission",
+                    "email": sender_email,
+                },
+                "to":          [{"email": receiver_email, "name": voter_name}],
+                "subject":     "✓ Your USSA ballot has been received",
+                "htmlContent": _confirmation_html(voter_name, ballot_id),
+            },
+            timeout=10,
+        )
+        response.raise_for_status()
+        print(f"[Brevo] Confirmation sent to {receiver_email}")
+    except Exception as e:
+        # Non-fatal — the vote is already in the DB. Just log and move on.
+        print(f"[Brevo] Confirmation email failed (non-fatal): {e}")
     api_key = os.getenv("BREVO_API_KEY")
     sender_email = os.getenv("BREVO_SENDER_EMAIL")
 
@@ -318,8 +425,6 @@ def send_otp_email(receiver_email: str, otp_code: str):
         )
 
 
-# ---------------------------------------------------------------------------
-# Helper
 # ---------------------------------------------------------------------------
 
 def mask_email(email: str) -> str:
@@ -370,7 +475,7 @@ def request_otp(payload: OTPRequest, conn=Depends(get_db)):
         )
     conn.commit()
 
-    # Send email — raises HTTPException if it fails
+    # Send email OTP — raises HTTPException if it fails
     send_otp_email(email, otp_code)
 
     # Only mark the cooldown / reset attempts once the email actually sent.
@@ -378,9 +483,9 @@ def request_otp(payload: OTPRequest, conn=Depends(get_db)):
     _otp_attempt_counts[payload.matric_number] = 0
 
     return {
-        "status": "success",
+        "status":  "success",
         "message": "OTP sent successfully.",
-        "email": mask_email(email),
+        "email":   mask_email(email),
     }
 
 
@@ -547,6 +652,26 @@ def cast_vote(payload: VotePayload, authorization: Optional[str] = Header(None),
         conn.rollback()
         print(f"[Vote Error] {e}")
         raise HTTPException(status_code=500, detail="Failed to record vote. Please try again.")
+
+    # Fetch voter details for the confirmation email.
+    # This runs AFTER the commit so the vote is safe regardless of what happens next.
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT name, email FROM Voters WHERE matric_number = %s",
+                (payload.matric_number,)
+            )
+            voter_details = cur.fetchone()
+
+        if voter_details:
+            send_confirmation_email(
+                receiver_email=voter_details["email"],
+                voter_name=voter_details["name"],
+                ballot_id=ballot_id,
+            )
+    except Exception as e:
+        # Non-fatal — vote is already committed
+        print(f"[Confirmation Email] Lookup failed (non-fatal): {e}")
 
     # Return the ballot_id as the voter's receipt — they can use this to
     # verify their ballot appears in the count after the election closes.

@@ -3,83 +3,91 @@ import csv
 import os
 from dotenv import load_dotenv
 
-# Load environment variables to securely get your Supabase URL
 load_dotenv()
 
 CSV_FILE = "voters.csv"
-DB_URL = os.getenv("DATABASE_URL")
+DB_URL   = os.getenv("DATABASE_URL")
+
+# ── Column header names from your Google Form CSV ─────────────────────────────
+# Update these if your Google Form uses different question labels.
+COL_NAME   = "Full Name"
+COL_EMAIL  = "Email Address"
+COL_MATRIC = "Matriculation Number"
+# ─────────────────────────────────────────────────────────────────────────────
+
 
 def import_voters():
     if not os.path.exists(CSV_FILE):
-        print(f"Error: {CSV_FILE} not found. Please place it in the project folder.")
+        print(f"Error: {CSV_FILE} not found. Place it in the project root.")
         return
 
     if not DB_URL:
-        print("Error: DATABASE_URL not found. Make sure your .env file is set up correctly.")
+        print("Error: DATABASE_URL not found in .env")
         return
 
-    print("Connecting to Supabase Cloud Database...")
+    print("Connecting to database...")
     try:
-        conn = psycopg2.connect(DB_URL)
+        conn   = psycopg2.connect(DB_URL)
         cursor = conn.cursor()
     except Exception as e:
-        print(f"Connection Failed: {e}")
+        print(f"Connection failed: {e}")
         return
 
-    voters_added = 0
-    voters_skipped = 0
+    added   = 0
+    skipped = 0
 
-    print("Starting voter import...")
+    print("Starting voter import...\n")
 
     try:
-        with open(CSV_FILE, mode='r', encoding='latin-1') as file:
-            csv_reader = csv.DictReader(file)
+        with open(CSV_FILE, mode='r', encoding='latin-1') as f:
+            reader = csv.DictReader(f)
 
-            for row in csv_reader:
-                # These must perfectly match your CSV headers
-                name = row.get('Full Name', '').strip()
-                email = row.get('Email Address', '').strip()
-                matric_number = row.get('Matriculation Number', '').strip().upper()
+            for row in reader:
+                name   = row.get(COL_NAME,   '').strip()
+                email  = row.get(COL_EMAIL,  '').strip()
+                matric = row.get(COL_MATRIC, '').strip().upper()
 
-                if not matric_number:
-                    print(f"Rejected: {name} - Missing matriculation number.")
-                    voters_skipped += 1
+                if not matric:
+                    print(f"  REJECTED  {name or '?'} — missing matric number")
+                    skipped += 1
                     continue
 
                 if not email:
-                    print(f"Rejected: {name} - Missing email address.")
-                    voters_skipped += 1
+                    print(f"  REJECTED  {matric} — missing email")
+                    skipped += 1
                     continue
 
                 try:
-                    # Notice the %s instead of ? and FALSE instead of 0
                     cursor.execute(
-                        "INSERT INTO Voters (matric_number, name, email, has_voted) VALUES (%s, %s, %s, FALSE)",
-                        (matric_number, name, email)
+                        """
+                        INSERT INTO Voters (matric_number, name, email, has_voted)
+                        VALUES (%s, %s, %s, FALSE)
+                            ON CONFLICT (matric_number) DO UPDATE
+                                                               SET name  = EXCLUDED.name,
+                                                               email = EXCLUDED.email
+                        """,
+                        (matric, name, email)
                     )
-                    voters_added += 1
-                    print(f"Added: {name} ({matric_number})")
+                    print(f"  OK        {matric}  {name}  {email}")
+                    added += 1
 
-                except psycopg2.IntegrityError:
-                    # In Postgres, if a query fails, you MUST rollback the transaction
-                    # before you can execute the next query in the loop.
+                except Exception as e:
                     conn.rollback()
-                    print(f"Skipped: {matric_number} is already registered.")
-                    voters_skipped += 1
+                    print(f"  ERROR     {matric} — {e}")
+                    skipped += 1
 
-        # Commit all successful additions to the cloud
         conn.commit()
-        print("\n--- Cloud Import Complete ---")
-        print(f"Successfully added: {voters_added}")
-        print(f"Skipped/Rejected: {voters_skipped}")
+        print(f"\n── Import complete ──────────────────")
+        print(f"   Added/Updated : {added}")
+        print(f"   Skipped/Errors: {skipped}")
 
     except Exception as e:
-        print(f"An error occurred during processing: {e}")
+        print(f"Processing error: {e}")
         conn.rollback()
-
     finally:
         cursor.close()
         conn.close()
+
 
 if __name__ == "__main__":
     import_voters()
