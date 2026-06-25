@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { User } from '../types';
 import { ELECTION_DATA } from '../constants';
 
-// --- LIVE RENDER BACKEND URL ---
+// --- YOUR LIVE RENDER BACKEND URL ---
 const API_BASE_URL = 'https://laa-voting-system.onrender.com';
 
 // ── Session expiry ────────────────────────────────────────────────────────────
@@ -160,8 +160,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       throw new Error(errorData.detail || 'Failed to cast vote');
     }
 
+    const result = await res.json();
+
     setVoteToken(null); // single-use: no longer needed once the ballot is recorded
-    setUser((prev) => prev ? { ...prev, hasVoted: true, userBallot } : null);
+    setUser((prev) => prev ? {
+      ...prev,
+      hasVoted:  true,
+      userBallot,
+      ballotId:  result.ballot_id ?? undefined,
+    } : null);
   };
 
   const logout = () => {

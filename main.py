@@ -180,14 +180,15 @@ def init_db():
 
             cur.execute("""
                         CREATE TABLE IF NOT EXISTS Ballots (
-                                                               matric_number              TEXT PRIMARY KEY REFERENCES Voters(matric_number),
+                                                               ballot_id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                             president                  TEXT,
                             male_vice_president        TEXT,
                             female_vice_president      TEXT,
                             minister_of_finance        TEXT,
                             minister_of_education      TEXT,
                             minister_of_information    TEXT,
-                            general_secretary          TEXT
+                            general_secretary          TEXT,
+                            cast_at                    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                             )
                         """)
 
@@ -504,10 +505,13 @@ def cast_vote(payload: VotePayload, authorization: Optional[str] = Header(None),
     c = payload.choices
     try:
         with conn.cursor() as cur:
+            # Insert the ballot with NO matric_number — a new UUID is generated
+            # by Postgres automatically. This makes ballots fully anonymous:
+            # even someone with direct DB access cannot connect a voter to
+            # their choices because there is no shared key between the two tables.
             cur.execute(
                 """
                 INSERT INTO Ballots (
-                    matric_number,
                     president,
                     male_vice_president,
                     female_vice_president,
@@ -516,10 +520,10 @@ def cast_vote(payload: VotePayload, authorization: Optional[str] = Header(None),
                     minister_of_information,
                     general_secretary
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    RETURNING ballot_id
                 """,
                 (
-                    payload.matric_number,
                     c.get("president"),
                     c.get("male_vice_president"),
                     c.get("female_vice_president"),
@@ -529,6 +533,11 @@ def cast_vote(payload: VotePayload, authorization: Optional[str] = Header(None),
                     c.get("general_secretary"),
                 ),
             )
+            ballot_id = str(cur.fetchone()[0])
+
+            # Mark the voter as having voted — this is the ONLY record that
+            # links a matric_number to "a ballot was cast". There is no way
+            # to go from this record to the actual ballot choices.
             cur.execute(
                 "UPDATE Voters SET has_voted = TRUE WHERE matric_number = %s",
                 (payload.matric_number,),
@@ -539,7 +548,13 @@ def cast_vote(payload: VotePayload, authorization: Optional[str] = Header(None),
         print(f"[Vote Error] {e}")
         raise HTTPException(status_code=500, detail="Failed to record vote. Please try again.")
 
-    return {"status": "success", "message": "Vote successfully cast."}
+    # Return the ballot_id as the voter's receipt — they can use this to
+    # verify their ballot appears in the count after the election closes.
+    return {
+        "status":    "success",
+        "message":   "Vote successfully cast.",
+        "ballot_id": ballot_id,
+    }
 
 
 # ---------------------------------------------------------------------------

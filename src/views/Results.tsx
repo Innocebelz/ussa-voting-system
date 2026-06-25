@@ -117,12 +117,45 @@ const Results: React.FC = () => {
             <button
                 onClick={handleLogout}
                 title="Sign out"
-                className="text-red-600 hover:text-zinc-700 p-2 rounded-full hover:bg-zinc-100 transition-colors shrink-0"
+                className="text-zinc-400 hover:text-zinc-700 p-2 rounded-full hover:bg-zinc-100 transition-colors shrink-0"
             >
               <LogOut className="h-5 w-5" />
             </button>
           </div>
         </div>
+
+        {/* ── Ballot receipt ───────────────────────────────────────────────── */}
+        {user?.ballotId && (
+            <div className="bg-white rounded-2xl border-2 border-zinc-200 overflow-hidden shadow-sm">
+              <div className="h-1.5 bg-yellow-500 w-full" />
+              <div className="px-6 py-5">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-zinc-900 flex items-center justify-center shrink-0 mt-0.5">
+                    <ShieldCheck className="w-5 h-5 text-yellow-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-black text-zinc-800 uppercase tracking-widest mb-1">
+                      Your Ballot Receipt
+                    </p>
+                    <p className="text-[11px] text-zinc-500 font-medium mb-3 leading-relaxed">
+                      Save this reference number. After the election closes, you can use it to confirm your ballot was counted — without revealing how you voted.
+                    </p>
+                    <div className="bg-zinc-50 border-2 border-zinc-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+                      <code className="text-xs font-mono font-bold text-zinc-700 break-all">
+                        {user.ballotId}
+                      </code>
+                      <button
+                          onClick={() => navigator.clipboard.writeText(user.ballotId!)}
+                          className="text-[10px] font-black text-yellow-600 hover:text-yellow-700 uppercase tracking-widest shrink-0 transition-colors"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+        )}
 
         {/* ── Turnout card ─────────────────────────────────────────────────── */}
         <div className="bg-white rounded-2xl border-2 border-zinc-200 overflow-hidden shadow-sm">

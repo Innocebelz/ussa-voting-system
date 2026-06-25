@@ -3,6 +3,7 @@ export interface User {
   hasVoted: boolean;
   name: string;
   userBallot?: Record<string, string>;
+  ballotId?: string;    // anonymous UUID receipt returned after a successful vote
 }
 
 export interface Candidate {
