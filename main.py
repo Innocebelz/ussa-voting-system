@@ -257,22 +257,93 @@ class AdminLoginRequest(BaseModel):
 # so we use Brevo's HTTPS API instead of smtplib)
 # ---------------------------------------------------------------------------
 
-def _otp_html(otp_code: str) -> str:
+def _otp_html(otp_code: str, voter_name: str = "") -> str:
+    LOGO_URL = "https://res.cloudinary.com/dbdgbj4qz/image/upload/v1782139265/logo_ze2vq7.jpg"
+
+    greeting = f"Hello <strong>{voter_name}</strong>," if voter_name else "Hello,"
+
     return f"""
-        <div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;">
-            <h2 style="color:#1a1a2e;">U.S.S.A Electoral Commission</h2>
-            <p>Hello,</p>
-            <p>Your one-time password (OTP) for the U.S.S.A Election is:</p>
-            <div style="font-size:2rem;font-weight:bold;letter-spacing:8px;
-                        color:#1a1a2e;text-align:center;padding:16px 0;">
-                {otp_code}
+        <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;
+                    border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;
+                    background:#ffffff;">
+
+            <!-- Gold header bar -->
+            <div style="background:#eab308;height:6px;width:100%;"></div>
+
+            <div style="padding:32px 32px 24px;">
+
+                <!-- Logo + title -->
+                <div style="text-align:center;margin-bottom:28px;">
+                    <img
+                        src="{LOGO_URL}"
+                        alt="USSA Logo"
+                        width="72"
+                        height="72"
+                        style="border-radius:50%;border:3px solid #eab308;
+                               display:block;margin:0 auto 14px;
+                               object-fit:cover;"
+                        onerror="this.style.display='none'"
+                    />
+                    <h2 style="margin:0;color:#18181b;font-size:18px;
+                               letter-spacing:2px;text-transform:uppercase;
+                               font-weight:900;">
+                        U.S.S.A Electoral Commission
+                    </h2>
+                    <p style="margin:4px 0 0;color:#eab308;font-size:10px;
+                              font-weight:bold;letter-spacing:3px;
+                              text-transform:uppercase;">
+                        'Unitè Triomphe Tout'
+                    </p>
+                </div>
+
+                <!-- Greeting -->
+                <p style="color:#3f3f46;font-size:14px;margin:0 0 6px;">
+                    {greeting}
+                </p>
+                <p style="color:#3f3f46;font-size:14px;margin:0 0 24px;line-height:1.6;">
+                    Your one-time verification code for the
+                    <strong>U.S.S.A General Election</strong> is:
+                </p>
+
+                <!-- OTP box -->
+                <div style="background:#18181b;border-radius:12px;
+                            padding:24px 16px;margin-bottom:24px;text-align:center;">
+                    <p style="margin:0 0 8px;font-size:10px;font-weight:bold;
+                              color:#a1a1aa;text-transform:uppercase;letter-spacing:3px;">
+                        Verification Code
+                    </p>
+                    <div style="font-size:42px;font-weight:900;letter-spacing:12px;
+                                color:#eab308;font-family:'Courier New',monospace;
+                                line-height:1.1;">
+                        {otp_code}
+                    </div>
+                    <p style="margin:10px 0 0;font-size:11px;color:#71717a;
+                              font-weight:bold;letter-spacing:1px;">
+                        Expires in 5 minutes
+                    </p>
+                </div>
+
+                <p style="color:#71717a;font-size:12px;
+                          margin:0 0 4px;line-height:1.6;">
+                    Enter this code on the verification page to access your ballot.
+                    Do not share this code with anyone.
+                </p>
+
+                <hr style="border:none;border-top:1px solid #f0f0f0;margin:20px 0;">
+
+                <p style="color:#a1a1aa;font-size:11px;
+                          text-align:center;margin:0;line-height:1.6;">
+                    If you did not request this code, someone may have entered
+                    your matric number by mistake. You can safely ignore this email.
+                </p>
             </div>
-            <p>This code expires in <strong>5 minutes</strong>.<br>
-            Do not share it with anyone.</p>
-            <hr style="border:none;border-top:1px solid #eee;">
-            <small style="color:#888;">
-                If you did not request this, please ignore this email.
-            </small>
+
+            <!-- Dark footer -->
+            <div style="background:#18181b;padding:16px 32px;text-align:center;">
+                <p style="margin:0;color:#71717a;font-size:11px;">
+                    © 2026 U.S.S.A Electoral Committee · Algeria
+                </p>
+            </div>
         </div>
     """
 
@@ -388,7 +459,7 @@ def send_confirmation_email(receiver_email: str, voter_name: str, ballot_id: str
         print(f"[Brevo] Confirmation email failed (non-fatal): {e}")
 
 
-def send_otp_email(receiver_email: str, otp_code: str):
+def send_otp_email(receiver_email: str, otp_code: str, voter_name: str = ""):
     """Send OTP via Brevo HTTP API. Raises HTTPException on failure."""
     api_key      = os.getenv("BREVO_API_KEY")
     sender_email = os.getenv("BREVO_SENDER_EMAIL")
@@ -413,9 +484,9 @@ def send_otp_email(receiver_email: str, otp_code: str):
                     "name":  "USSA Electoral Commission",
                     "email": sender_email,
                 },
-                "to":          [{"email": receiver_email}],
-                "subject":     "USSA Election — Your Secure OTP",
-                "htmlContent": _otp_html(otp_code),
+                "to":          [{"email": receiver_email, "name": voter_name}],
+                "subject":     "USSA Election — Your Verification Code",
+                "htmlContent": _otp_html(otp_code, voter_name),
             },
             timeout=10,
         )
@@ -456,7 +527,7 @@ def request_otp(payload: OTPRequest, conn=Depends(get_db)):
 
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(
-            "SELECT email FROM Voters WHERE matric_number = %s",
+            "SELECT name, email FROM Voters WHERE matric_number = %s",
             (payload.matric_number,)
         )
         voter = cur.fetchone()
@@ -464,7 +535,8 @@ def request_otp(payload: OTPRequest, conn=Depends(get_db)):
     if not voter:
         raise HTTPException(status_code=404, detail="Matriculation number not found.")
 
-    email = voter["email"]
+    email       = voter["email"]
+    voter_name  = voter["name"]
     otp_code = str(random.SystemRandom().randint(100000, 999999))
     expires_at = datetime.now() + timedelta(minutes=5)
 
@@ -480,7 +552,7 @@ def request_otp(payload: OTPRequest, conn=Depends(get_db)):
     conn.commit()
 
     # Send email OTP — raises HTTPException if it fails
-    send_otp_email(email, otp_code)
+    send_otp_email(email, otp_code, voter_name)
 
     # Only mark the cooldown / reset attempts once the email actually sent.
     _last_otp_request_at[payload.matric_number] = now
