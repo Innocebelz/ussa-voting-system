@@ -16,11 +16,31 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Depends, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from passlib.context import CryptContext
 
 load_dotenv()
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# ---------------------------------------------------------------------------
+# Password hashing — PBKDF2-SHA256 via Python stdlib.
+# No external dependency, no version conflicts, no 72-byte limit.
+# OWASP recommends 260,000 iterations for SHA-256 as of 2023.
+# ---------------------------------------------------------------------------
+
+_PBKDF2_ITERATIONS = 260_000
+
+
+def hash_password(password: str) -> str:
+    salt = secrets.token_hex(16)
+    key  = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), _PBKDF2_ITERATIONS)
+    return f"pbkdf2:sha256:{_PBKDF2_ITERATIONS}:{salt}:{key.hex()}"
+
+
+def verify_password(password: str, stored_hash: str) -> bool:
+    try:
+        _, algorithm, iterations, salt, stored_key = stored_hash.split(":", 4)
+        key = hashlib.pbkdf2_hmac(algorithm, password.encode(), salt.encode(), int(iterations))
+        return hmac.compare_digest(key.hex(), stored_key)
+    except Exception:
+        return False
 
 # ---------------------------------------------------------------------------
 # App Setup
@@ -237,7 +257,7 @@ def init_db():
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("SELECT COUNT(*) as c FROM Admin_Users")
                 if cur.fetchone()["c"] == 0:
-                    hashed = pwd_context.hash(seed_password)
+                    hashed = hash_password(seed_password)
                     cur.execute(
                         """INSERT INTO Admin_Users (username, password_hash, full_name, role)
                            VALUES ('admin', %s, 'System Administrator', 'super_admin')
@@ -709,6 +729,7 @@ def verify_otp(payload: OTPVerify, conn=Depends(get_db)):
 
     return response
 
+
 # ---------------------------------------------------------------------------
 # Routes — Voting
 # ---------------------------------------------------------------------------
@@ -926,7 +947,7 @@ def admin_login(payload: AdminLoginRequest, request: Request, conn=Depends(get_d
         )
         admin = cur.fetchone()
 
-    if not admin or not pwd_context.verify(payload.password, admin["password_hash"]):
+    if not admin or not verify_password(payload.password, admin["password_hash"]):
         # Log failed attempt (non-fatal)
         try:
             log_audit(conn, "admin_login_failed",
@@ -1053,7 +1074,7 @@ def create_admin_user(
     if payload.role not in ("ec_member", "super_admin"):
         raise HTTPException(status_code=400, detail="Role must be 'ec_member' or 'super_admin'.")
 
-    hashed = pwd_context.hash(payload.password)
+    hashed = hash_password(payload.password)
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
