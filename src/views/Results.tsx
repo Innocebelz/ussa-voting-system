@@ -138,7 +138,7 @@ const Results: React.FC = () => {
                       Your Ballot Receipt
                     </p>
                     <p className="text-[11px] text-zinc-500 font-medium mb-3 leading-relaxed">
-                      Save this reference number. After the election closes, you can use it to confirm your ballot was counted.
+                      Save this reference number. After the election closes, you can use it to confirm your ballot was counted — without revealing how you voted.
                     </p>
                     <div className="bg-zinc-50 border-2 border-zinc-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
                       <code className="text-xs font-mono font-bold text-zinc-700 break-all">
@@ -236,47 +236,90 @@ const Results: React.FC = () => {
           </div>
         </div>
 
-        {/* ── Ballot summary ───────────────────────────────────────────── */}
+        {/* ── Your ballot summary ───────────────────────────────────────────── */}
         <div className="bg-white rounded-2xl border-2 border-zinc-200 overflow-hidden shadow-sm">
           <div className="h-1.5 bg-yellow-500 w-full" />
           <div className="p-6">
             <p className="text-xs font-black text-zinc-400 uppercase tracking-widest mb-5">
               Your Cast Ballot
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {ELECTION_DATA.map((category) => {
-                const selectedId  = user?.userBallot?.[category.position];
-                const candidate   = category.candidates.find(c => c.id === selectedId);
 
-                return (
-                    <div
-                        key={category.position}
-                        className="flex items-center gap-3 bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3"
-                    >
-                      {candidate?.image && (
-                          <img
-                              src={candidate.image}
-                              alt={candidate.name}
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src =
-                                    `https://ui-avatars.com/api/?name=${encodeURIComponent(candidate?.name ?? '')}&background=18181b&color=eab308&size=64`;
-                              }}
-                              className="w-9 h-9 rounded-full object-cover border-2 border-zinc-200 shrink-0"
-                          />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">
-                          {category.position}
+            {/* Check if we actually have ballot choices stored in this session */}
+            {user?.userBallot && Object.values(user.userBallot).some(v => v) ? (
+
+                /* ── Show choices — only available in the same session as voting ── */
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {ELECTION_DATA.map((category) => {
+                    const selectedId = user?.userBallot?.[category.position];
+                    const candidate  = category.candidates.find(c => c.id === selectedId);
+
+                    return (
+                        <div
+                            key={category.position}
+                            className="flex items-center gap-3 bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3"
+                        >
+                          {candidate?.image && (
+                              <img
+                                  src={candidate.image}
+                                  alt={candidate.name}
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).src =
+                                        `https://ui-avatars.com/api/?name=${encodeURIComponent(candidate?.name ?? '')}&background=18181b&color=eab308&size=64`;
+                                  }}
+                                  className="w-9 h-9 rounded-full object-cover border-2 border-zinc-200 shrink-0"
+                              />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">
+                              {category.position}
+                            </p>
+                            <p className="text-sm font-black text-zinc-900 truncate">
+                              {candidate?.name || '—'}
+                            </p>
+                          </div>
+                          <CheckCircle2 className="w-4 h-4 text-yellow-500 shrink-0" />
+                        </div>
+                    );
+                  })}
+                </div>
+
+            ) : (
+
+                /* ── No ballot data in this session — explain why ── */
+                <div className="flex flex-col items-center text-center gap-4 py-4">
+                  <div className="w-14 h-14 rounded-full bg-zinc-100 border-2 border-zinc-200 flex items-center justify-center">
+                    <ShieldCheck className="w-7 h-7 text-zinc-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-black text-zinc-700 mb-2">
+                      Your ballot choices are protected by anonymisation
+                    </p>
+                    <p className="text-xs text-zinc-400 font-medium leading-relaxed max-w-sm">
+                      Your ballot was recorded using a random anonymous ID — no link
+                      exists between your identity and your choices, even in the
+                      database. Because of this, your specific selections cannot be
+                      displayed when you log in again.
+                    </p>
+                  </div>
+                  {user?.ballotId ? (
+                      <div className="bg-zinc-50 border-2 border-zinc-200 rounded-xl px-4 py-3 w-full text-left">
+                        <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">
+                          Use your receipt code to verify your ballot was counted
                         </p>
-                        <p className="text-sm font-black text-zinc-900 truncate">
-                          {candidate?.name || '—'}
-                        </p>
+                        <code className="text-xs font-mono font-bold text-zinc-700 break-all">
+                          {user.ballotId}
+                        </code>
                       </div>
-                      <CheckCircle2 className="w-4 h-4 text-yellow-500 shrink-0" />
-                    </div>
-                );
-              })}
-            </div>
+                  ) : (
+                      <p className="text-xs text-zinc-400 font-medium">
+                        Go to the{' '}
+                        <span className="font-black text-yellow-600">/election-results</span>
+                        {' '}page and use the Ballot Verification box with your receipt code.
+                      </p>
+                  )}
+                </div>
+
+            )}
           </div>
         </div>
 
