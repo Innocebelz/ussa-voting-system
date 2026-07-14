@@ -22,15 +22,21 @@ export const ELECTION_DATA: ElectionCategory[] = [
     candidates: [
       {
         id: 'pres_1',
-        name: 'Mr. Odaster T. Mensah',
+        name: 'Mr. Omara Abraham Christopher',
         manifesto: 'Promoting unity, academic excellence, and community development through transparent leadership and inclusive representation.',
         image: 'https://res.cloudinary.com/dbdgbj4qz/image/upload/v1781651683/odaster_uwvfyw.jpg',
       },
       {
         id: 'pres_2',
-        name: 'Mr. Emmanuel Djan',
+        name: 'Mr. Akampanya Agaston',
         manifesto: 'Building a stronger, more inclusive, and progressive students’ union through servant leadership, transparent governance, and effective advocacy.',
         image: 'https://res.cloudinary.com/dbdgbj4qz/image/upload/v1781651683/okwera_yahdc6.jpg',
+      },
+      {
+        id: 'pres_3',
+        name: 'Mr. Natukunda Isaiah',
+        manifesto: 'Building a stronger, more inclusive, and progressive students’ union through servant leadership, transparent governance, and effective advocacy.',
+        image: 'https://res.cloudinary.com/dbdgbj4qz/image/upload/v1781651683/maria_fjcsuu.jpg',
       },
     ],
   },
@@ -43,13 +49,13 @@ export const ELECTION_DATA: ElectionCategory[] = [
     candidates: [
       {
         id: 'mvp_1',
-        name: 'Mr. Edmond Nkajja',
+        name: 'Mr. Zziwa Charles',
         manifesto: 'Enhancing student welfare and fostering a vibrant campus life through dedicated service and community engagement.',
         image: 'https://res.cloudinary.com/dbdgbj4qz/image/upload/v1781651680/edmond_n8awmr.jpg',
       },
       {
         id: 'mvp_2',
-        name: 'Mr. Ronald Ekeno',
+        name: 'Mr. Okata Ben',
         manifesto: 'Advocating for student welfare, academic excellence, and a vibrant campus community through inclusive leadership and effective representation.',
         image: 'https://res.cloudinary.com/dbdgbj4qz/image/upload/v1781651684/ronald_kp9uns.jpg',
       },
@@ -106,15 +112,21 @@ export const ELECTION_DATA: ElectionCategory[] = [
     candidates: [
       {
         id: 'medu_1',
-        name: 'Mr. Isaac Aine',
+        name: 'Mr. Kwikiriza Morris',
         manifesto: 'Dedicated to academic excellence, co-curricular development, and sports.',
         image: 'https://res.cloudinary.com/dbdgbj4qz/image/upload/v1782255664/bryant_ocrzg9.jpg',
       },
       {
         id: 'medu_2',
-        name: 'Ms. Becky Among',
+        name: 'Ms. Muhindo Brian',
         manifesto: 'Promoting transparent debates and accountable leadership in the assembly.',
         image: 'https://res.cloudinary.com/dbdgbj4qz/image/upload/v1781651677/becky_udvps2.jpg',
+      },
+      {
+        id: 'medu_3',
+        name: 'Ms. Omongin David Silas',
+        manifesto: 'Promoting transparent debates and accountable leadership in the assembly.',
+        image: 'https://res.cloudinary.com/dbdgbj4qz/image/upload/v1782255664/ariebi_elhzrc.jpg',
       },
     ],
   },
