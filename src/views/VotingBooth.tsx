@@ -22,19 +22,24 @@ const VotingBooth: React.FC = () => {
         return () => clearTimeout(t);
     }, []);
 
-    // Pre-select unopposed candidates
-    useEffect(() => {
-        const initial: Record<string, string> = {};
-        ELECTION_DATA.forEach(cat => {
-            if (cat.unopposed && cat.candidates.length > 0) {
-                initial[cat.position] = cat.candidates[0].id;
-            }
-        });
-        setSelections(initial);
-    }, []);
+    // REMOVED: The useEffect that pre-selected unopposed candidates is gone.
+    // Unopposed candidates now start completely blank.
 
     const handleSelect = (position: string, candidateId: string) => {
-        setSelections(prev => ({ ...prev, [position]: candidateId }));
+        setSelections(prev => {
+            const category = ELECTION_DATA.find(c => c.position === position);
+
+            // If the category is unopposed and the user clicks the currently selected candidate again,
+            // we "un-check" it, returning it to a blank/abstain state.
+            if (category?.unopposed && prev[position] === candidateId) {
+                const newSelections = { ...prev };
+                delete newSelections[position];
+                return newSelections;
+            }
+
+            return { ...prev, [position]: candidateId };
+        });
+
         // Brief pulse feedback
         setJustSelected(candidateId);
         setTimeout(() => setJustSelected(null), 600);
@@ -45,11 +50,20 @@ const VotingBooth: React.FC = () => {
         setExpanded(prev => ({ ...prev, [candidateId]: !prev[candidateId] }));
     };
 
-    const totalPositions    = ELECTION_DATA.length;
-    const selectedCount     = ELECTION_DATA.filter(c => selections[c.position]).length;
-    const remaining         = totalPositions - selectedCount;
-    const isFormComplete    = remaining === 0;
-    const progressPct       = Math.round((selectedCount / totalPositions) * 100);
+    // ── Form Validation Math ──────────────────────────────────────────────
+    // We only require students to vote in competitive (opposed) races.
+    // Unopposed races are optional (blank = abstain/no).
+    const opposedCategories = ELECTION_DATA.filter(c => !c.unopposed);
+    const requiredPositionsCount = opposedCategories.length;
+    const selectedRequiredCount = opposedCategories.filter(c => selections[c.position]).length;
+
+    const remaining = requiredPositionsCount - selectedRequiredCount;
+    const isFormComplete = remaining === 0;
+
+    // Progress bar fills up based ONLY on the required competitive races
+    const progressPct = requiredPositionsCount === 0
+        ? 100
+        : Math.round((selectedRequiredCount / requiredPositionsCount) * 100);
 
     const handleVoteSubmit = async () => {
         try {
@@ -105,7 +119,7 @@ const VotingBooth: React.FC = () => {
                         Progress
                     </span>
                     <span className={`text-xs font-black uppercase tracking-widest ${isFormComplete ? 'text-green-600' : 'text-yellow-600'}`}>
-                        {isFormComplete ? '✓ All positions selected' : `${remaining} remaining`}
+                        {isFormComplete ? '✓ Ready to Submit' : `${remaining} Required remaining`}
                     </span>
                 </div>
                 <div className="w-full h-2.5 bg-zinc-100 rounded-full overflow-hidden">
@@ -114,17 +128,9 @@ const VotingBooth: React.FC = () => {
                         style={{ width: `${progressPct}%` }}
                     />
                 </div>
-                <div className="flex justify-between mt-1.5">
-                    {ELECTION_DATA.map(cat => (
-                        <div
-                            key={cat.position}
-                            title={cat.position}
-                            className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                                selections[cat.position] ? 'bg-yellow-500 scale-125' : 'bg-zinc-200'
-                            }`}
-                        />
-                    ))}
-                </div>
+                <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-widest mt-3 text-center">
+                    Unopposed positions are optional. Leaving them blank counts as an abstention.
+                </p>
             </div>
 
             {/* ── Ballot positions ───────────────────────────────────────── */}
@@ -170,16 +176,12 @@ const VotingBooth: React.FC = () => {
                                         <div key={candidate.id} className="flex flex-col">
 
                                             {/* ── Candidate row ── */}
+                                            {/* FIX: Unopposed candidates are no longer disabled. They can be clicked to toggle selection. */}
                                             <button
-                                                onClick={() => !category.unopposed && handleSelect(category.position, candidate.id)}
-                                                disabled={category.unopposed}
-                                                className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-all duration-200 ${
-                                                    category.unopposed
-                                                        ? 'cursor-default'
-                                                        : 'active:bg-zinc-50'
-                                                } ${isSelected ? 'bg-yellow-50' : 'bg-white hover:bg-zinc-50'} ${
-                                                    isPulsing ? 'scale-[0.99]' : 'scale-100'
-                                                }`}
+                                                onClick={() => handleSelect(category.position, candidate.id)}
+                                                className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-all duration-200 active:bg-zinc-50 ${
+                                                    isSelected ? 'bg-yellow-50' : 'bg-white hover:bg-zinc-50'
+                                                } ${isPulsing ? 'scale-[0.99]' : 'scale-100'}`}
                                             >
                                                 {/* Photo — small on mobile, bigger on desktop */}
                                                 <div className={`relative shrink-0 transition-all duration-300 ${isSelected ? 'ring-2 ring-yellow-500 ring-offset-1 rounded-full' : ''}`}>
@@ -251,7 +253,7 @@ const VotingBooth: React.FC = () => {
             <div className="sticky bottom-0 z-20 bg-stone-50 border-t-2 border-zinc-200 pt-4 pb-6 px-0 -mx-4 sm:mx-0 sm:px-0 px-4">
                 {!isFormComplete && (
                     <p className="text-center text-xs font-black text-zinc-400 uppercase tracking-widest mb-3">
-                        {remaining} position{remaining !== 1 ? 's' : ''} still need{remaining === 1 ? 's' : ''} a selection
+                        {remaining} required position{remaining !== 1 ? 's' : ''} still need{remaining === 1 ? 's' : ''} a selection
                     </p>
                 )}
                 <button
@@ -295,7 +297,7 @@ const VotingBooth: React.FC = () => {
 
                             <p className="text-sm text-zinc-500 text-center mb-1 font-medium">
                                 You are about to submit your ballot for{' '}
-                                <strong className="text-zinc-800">{totalPositions} positions</strong>.
+                                <strong className="text-zinc-800">{ELECTION_DATA.length} positions</strong>.
                             </p>
                             <p className="text-xs text-zinc-400 text-center mb-6 font-semibold uppercase tracking-wider">
                                 This cannot be undone.
@@ -305,24 +307,39 @@ const VotingBooth: React.FC = () => {
                             <div className="bg-zinc-50 rounded-lg border border-zinc-200 divide-y divide-zinc-100 mb-6 text-left max-h-48 overflow-y-auto">
                                 {ELECTION_DATA.map(cat => {
                                     const sel = cat.candidates.find(c => c.id === selections[cat.position]);
-                                    return sel ? (
+
+                                    return (
                                         <div key={cat.position} className="flex items-center gap-3 px-3 py-2">
-                                            <img
-                                                src={sel.image}
-                                                alt={sel.name}
-                                                onError={(e) => {
-                                                    (e.target as HTMLImageElement).src =
-                                                        `https://ui-avatars.com/api/?name=${encodeURIComponent(sel.name)}&background=18181b&color=eab308&size=64`;
-                                                }}
-                                                className="w-8 h-8 rounded-full object-cover border border-zinc-200 shrink-0"
-                                            />
-                                            <div className="min-w-0">
-                                                <p className="text-xs font-black text-zinc-900 truncate">{sel.name}</p>
-                                                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">{cat.position}</p>
-                                            </div>
-                                            <CheckCircle2 className="w-4 h-4 text-yellow-500 shrink-0 ml-auto" />
+                                            {sel ? (
+                                                <>
+                                                    <img
+                                                        src={sel.image}
+                                                        alt={sel.name}
+                                                        onError={(e) => {
+                                                            (e.target as HTMLImageElement).src =
+                                                                `https://ui-avatars.com/api/?name=${encodeURIComponent(sel.name)}&background=18181b&color=eab308&size=64`;
+                                                        }}
+                                                        className="w-8 h-8 rounded-full object-cover border border-zinc-200 shrink-0"
+                                                    />
+                                                    <div className="min-w-0">
+                                                        <p className="text-xs font-black text-zinc-900 truncate">{sel.name}</p>
+                                                        <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">{cat.position}</p>
+                                                    </div>
+                                                    <CheckCircle2 className="w-4 h-4 text-yellow-500 shrink-0 ml-auto" />
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <div className="w-8 h-8 rounded-full bg-zinc-200 border border-zinc-300 shrink-0 flex items-center justify-center">
+                                                        <span className="text-[10px] font-bold text-zinc-400">-</span>
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <p className="text-xs font-black text-zinc-500 truncate italic">Abstained (Blank)</p>
+                                                        <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">{cat.position}</p>
+                                                    </div>
+                                                </>
+                                            )}
                                         </div>
-                                    ) : null;
+                                    );
                                 })}
                             </div>
 
