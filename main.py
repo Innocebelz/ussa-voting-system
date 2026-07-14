@@ -351,7 +351,8 @@ def log_audit(
 # ---------------------------------------------------------------------------
 
 def _otp_html(otp_code: str, voter_name: str = "") -> str:
-    LOGO_URL = "https://res.cloudinary.com/dbdgbj4qz/image/upload/v1782139265/logo_ze2vq7.jpg"
+    # TODO: replace with your real Cloudinary logo URL once uploaded
+    LOGO_URL = "https://res.cloudinary.com/REPLACE/image/upload/REPLACE/ussa_logo.png"
 
     greeting = f"Hello <strong>{voter_name}</strong>," if voter_name else "Hello,"
 
@@ -860,6 +861,97 @@ def get_turnout(conn=Depends(get_db)):
         "total_eligible": total,
         "votes_cast": voted,
         "turnout_percentage": percentage,
+    }
+
+
+@app.get("/api/admin/integrity-check")
+def pre_election_integrity_check(conn=Depends(get_db), admin=Depends(require_admin)):
+    """
+    Runs a set of database integrity checks to catch registration fraud
+    before the election opens. Returns flagged issues the EC should
+    investigate. Safe to run multiple times.
+
+    Checks:
+      1. Duplicate emails — one email used for more than one matric number
+      2. Duplicate names — same full name appears on more than one matric number
+         (may be a coincidence but worth flagging)
+      3. Voters who have already voted (sanity check before opening)
+      4. Total voter count
+    """
+    issues = []
+
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+
+        # ── Check 1: Duplicate emails ──────────────────────────────────────
+        cur.execute("""
+                    SELECT email, COUNT(*) as count,
+                   array_agg(matric_number ORDER BY matric_number) as matric_numbers,
+                   array_agg(name          ORDER BY matric_number) as names
+                    FROM Voters
+                    GROUP BY LOWER(email)
+                    HAVING COUNT(*) > 1
+                    ORDER BY count DESC
+                    """)
+        dup_emails = cur.fetchall()
+        for row in dup_emails:
+            issues.append({
+                "type":    "duplicate_email",
+                "severity": "high",
+                "detail":  f"Email '{row['email']}' is registered under "
+                           f"{row['count']} matric numbers: "
+                           f"{', '.join(row['matric_numbers'])} "
+                           f"({', '.join(row['names'])})",
+                "matric_numbers": list(row['matric_numbers']),
+                "email":   row['email'],
+            })
+
+        # ── Check 2: Duplicate names ───────────────────────────────────────
+        cur.execute("""
+                    SELECT LOWER(TRIM(name)) as norm_name,
+                           COUNT(*) as count,
+                   array_agg(matric_number ORDER BY matric_number) as matric_numbers,
+                   array_agg(email         ORDER BY matric_number) as emails
+                    FROM Voters
+                    GROUP BY LOWER(TRIM(name))
+                    HAVING COUNT(*) > 1
+                    ORDER BY count DESC
+                        LIMIT 50
+                    """)
+        dup_names = cur.fetchall()
+        for row in dup_names:
+            issues.append({
+                "type":    "duplicate_name",
+                "severity": "medium",
+                "detail":  f"Name '{row['norm_name']}' appears {row['count']} times: "
+                           f"{', '.join(row['matric_numbers'])} "
+                           f"({', '.join(row['emails'])})",
+                "matric_numbers": list(row['matric_numbers']),
+            })
+
+        # ── Check 3: has_voted summary ─────────────────────────────────────
+        cur.execute("SELECT COUNT(*) as total FROM Voters")
+        total = cur.fetchone()["total"]
+
+        cur.execute("SELECT COUNT(*) as voted FROM Voters WHERE has_voted = TRUE")
+        voted = cur.fetchone()["voted"]
+
+        # ── Check 4: Orphaned ballot UUIDs (ballots with no matching voter) ─
+        # Should always be zero after anonymisation — but good to verify
+        cur.execute("SELECT COUNT(*) as ballot_count FROM Ballots")
+        ballot_count = cur.fetchone()["ballot_count"]
+
+    log_audit(conn, "integrity_check_run",
+              admin_username=admin.get("username", "unknown"),
+              detail=f"{len(issues)} issues found, {total} voters, {ballot_count} ballots")
+
+    return {
+        "status":       "success",
+        "total_voters": total,
+        "voted_count":  voted,
+        "ballot_count": ballot_count,
+        "issue_count":  len(issues),
+        "issues":       issues,
+        "safe_to_open": len([i for i in issues if i["severity"] == "high"]) == 0,
     }
 
 

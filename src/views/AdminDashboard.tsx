@@ -41,7 +41,7 @@ function useCountUp(target: number, duration = 1000, delay = 0) {
 }
 
 const AdminDashboard: React.FC = () => {
-    const [activeTab, setActiveTab]           = useState<'overview' | 'members' | 'audit'>('overview');
+    const [activeTab, setActiveTab]           = useState<'overview' | 'members' | 'audit' | 'integrity'>('overview');
     const [turnout, setTurnout]               = useState<TurnoutData | null>(null);
     const [tally, setTally]                   = useState<TallyData | null>(null);
     const [isElectionOpen, setIsElectionOpen] = useState<boolean>(true);
@@ -61,6 +61,10 @@ const AdminDashboard: React.FC = () => {
     // Audit log tab
     const [auditLog, setAuditLog]         = useState<any[]>([]);
     const [auditLoading, setAuditLoading] = useState(false);
+
+    // Integrity check tab
+    const [integrityData, setIntegrityData]     = useState<any | null>(null);
+    const [integrityLoading, setIntegrityLoading] = useState(false);
 
     const isSuperAdmin = sessionStorage.getItem('laa_admin_user_role') === 'super_admin';
     const currentAdminUsername = sessionStorage.getItem('laa_admin_username') || '';
@@ -206,6 +210,18 @@ const AdminDashboard: React.FC = () => {
         finally { setAuditLoading(false); }
     };
 
+    const fetchIntegrityCheck = async () => {
+        setIntegrityLoading(true);
+        setIntegrityData(null);
+        try {
+            const res = await fetch(`${BACKEND_URL}/api/admin/integrity-check`, { headers: getAuthHeaders() });
+            if (res.status === 401) { handleSessionExpired(); return; }
+            const data = await res.json();
+            if (data.status === 'success') setIntegrityData(data);
+        } catch (e) { console.error('Failed to run integrity check:', e); }
+        finally { setIntegrityLoading(false); }
+    };
+
     const handleAddMember = async (e: React.FormEvent) => {
         e.preventDefault();
         setMemberError('');
@@ -296,18 +312,20 @@ const AdminDashboard: React.FC = () => {
             </div>
 
             {/* ── Tab bar ────────────────────────────────────────────────── */}
-            <div className="flex gap-1 bg-zinc-100 rounded-xl p-1 mb-6">
+            <div className="flex gap-1 bg-zinc-100 rounded-xl p-1 mb-6 flex-wrap">
                 {([
-                    { key: 'overview', label: 'Overview' },
-                    { key: 'members',  label: 'EC Members' },
-                    { key: 'audit',    label: 'Audit Log'  },
+                    { key: 'overview',   label: 'Overview'        },
+                    { key: 'members',    label: 'EC Members'      },
+                    { key: 'audit',      label: 'Audit Log'       },
+                    { key: 'integrity',  label: '🛡 Pre-Election Check' },
                 ] as const).map(tab => (
                     <button
                         key={tab.key}
                         onClick={() => {
                             setActiveTab(tab.key);
-                            if (tab.key === 'members') fetchMembers();
-                            if (tab.key === 'audit')   fetchAuditLog();
+                            if (tab.key === 'members')   fetchMembers();
+                            if (tab.key === 'audit')     fetchAuditLog();
+                            if (tab.key === 'integrity') fetchIntegrityCheck();
                         }}
                         className={`flex-1 py-2.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${
                             activeTab === tab.key
@@ -768,6 +786,170 @@ const AdminDashboard: React.FC = () => {
                             </div>
                         )}
                     </div>
+                </div>
+            )}
+
+            {/* ── INTEGRITY CHECK TAB ─────────────────────────────────────── */}
+            {activeTab === 'integrity' && (
+                <div className="space-y-5">
+
+                    {/* Run button */}
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h2 className="text-sm font-black text-zinc-800 uppercase tracking-widest">Pre-Election Integrity Check</h2>
+                            <p className="text-xs text-zinc-400 font-medium mt-1">
+                                Scans the voter database for duplicate emails, duplicate names, and other registration anomalies before opening the election.
+                            </p>
+                        </div>
+                        <button
+                            onClick={fetchIntegrityCheck}
+                            disabled={integrityLoading}
+                            className="shrink-0 flex items-center gap-2 bg-zinc-900 text-white text-xs font-black uppercase tracking-widest px-5 py-2.5 rounded-xl hover:bg-zinc-800 border-b-4 border-zinc-700 active:border-b-0 active:scale-95 transition-all disabled:opacity-50 ml-4"
+                        >
+                            {integrityLoading ? (
+                                <><Loader2 className="w-4 h-4 animate-spin text-yellow-400" /> Running...</>
+                            ) : (
+                                '▶ Run Check'
+                            )}
+                        </button>
+                    </div>
+
+                    {/* Loading */}
+                    {integrityLoading && (
+                        <div className="bg-white rounded-2xl border-2 border-zinc-200 p-10 flex flex-col items-center gap-3">
+                            <Loader2 className="w-8 h-8 animate-spin text-yellow-500" />
+                            <p className="text-xs font-black text-zinc-400 uppercase tracking-widest">Scanning voter database...</p>
+                        </div>
+                    )}
+
+                    {/* Results */}
+                    {integrityData && !integrityLoading && (
+                        <>
+                            {/* Summary row */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                {[
+                                    { label: 'Total Voters',    value: integrityData.total_voters,  color: 'bg-zinc-900 text-white'       },
+                                    { label: 'Voted So Far',    value: integrityData.voted_count,   color: 'bg-zinc-100 text-zinc-700'    },
+                                    { label: 'Ballot Records',  value: integrityData.ballot_count,  color: 'bg-zinc-100 text-zinc-700'    },
+                                    { label: 'Issues Found',    value: integrityData.issue_count,
+                                        color: integrityData.issue_count === 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' },
+                                ].map(s => (
+                                    <div key={s.label} className={`rounded-xl p-4 text-center ${s.color}`}>
+                                        <p className="text-3xl font-black tabular-nums">{s.value}</p>
+                                        <p className="text-[10px] font-black uppercase tracking-widest mt-1 opacity-70">{s.label}</p>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Safe-to-open banner */}
+                            <div className={`rounded-xl border-2 px-5 py-4 flex items-center gap-3 ${
+                                integrityData.safe_to_open
+                                    ? 'bg-green-50 border-green-200'
+                                    : 'bg-red-50 border-red-200'
+                            }`}>
+                                <span className="text-2xl">{integrityData.safe_to_open ? '✅' : '⚠️'}</span>
+                                <div>
+                                    <p className={`text-sm font-black uppercase tracking-wider ${integrityData.safe_to_open ? 'text-green-800' : 'text-red-800'}`}>
+                                        {integrityData.safe_to_open
+                                            ? 'No high-severity issues detected — safe to open the election'
+                                            : 'High-severity issues found — resolve before opening the election'
+                                        }
+                                    </p>
+                                    <p className={`text-xs font-medium mt-0.5 ${integrityData.safe_to_open ? 'text-green-600' : 'text-red-600'}`}>
+                                        {integrityData.safe_to_open
+                                            ? 'Duplicate name flags (medium severity) may be coincidences — review at your discretion.'
+                                            : 'Duplicate emails mean one person may be able to vote twice. Investigate each case in Supabase before proceeding.'
+                                        }
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Issues list */}
+                            {integrityData.issues.length === 0 ? (
+                                <div className="bg-white rounded-2xl border-2 border-green-200 p-8 text-center">
+                                    <p className="text-4xl mb-3">🎉</p>
+                                    <p className="text-sm font-black text-green-800 uppercase tracking-widest">All Clear</p>
+                                    <p className="text-xs text-zinc-400 font-medium mt-2">No duplicate emails or suspicious registrations detected.</p>
+                                </div>
+                            ) : (
+                                <div className="bg-white rounded-2xl border-2 border-zinc-200 overflow-hidden">
+                                    <div className="h-1 bg-yellow-500" />
+                                    <div className="p-5">
+                                        <h3 className="text-sm font-black text-zinc-800 uppercase tracking-widest mb-4">
+                                            Issues Requiring EC Review
+                                        </h3>
+                                        <div className="space-y-3">
+                                            {integrityData.issues.map((issue: any, idx: number) => (
+                                                <div key={idx} className={`rounded-xl border-2 px-4 py-3 ${
+                                                    issue.severity === 'high'
+                                                        ? 'bg-red-50 border-red-200'
+                                                        : 'bg-amber-50 border-amber-200'
+                                                }`}>
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest ${
+                                                            issue.severity === 'high'
+                                                                ? 'bg-red-200 text-red-800'
+                                                                : 'bg-amber-200 text-amber-800'
+                                                        }`}>
+                                                            {issue.severity === 'high' ? '🚨 High' : '⚠️ Medium'} · {issue.type.replace(/_/g, ' ')}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-xs text-zinc-700 font-medium leading-relaxed">
+                                                        {issue.detail}
+                                                    </p>
+                                                    <p className={`text-[10px] font-bold mt-1.5 ${
+                                                        issue.severity === 'high' ? 'text-red-600' : 'text-amber-700'
+                                                    }`}>
+                                                        {issue.type === 'duplicate_email'
+                                                            ? 'ACTION: Identify which registration is legitimate. Delete the fraudulent row in Supabase → Voters table.'
+                                                            : 'ACTION: Verify in university records that these are two different people with the same name. If the same person, remove the duplicate.'}
+                                                    </p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* What to do guide */}
+                            <div className="bg-white rounded-2xl border-2 border-zinc-200 overflow-hidden">
+                                <div className="h-1 bg-zinc-900" />
+                                <div className="p-5 space-y-3">
+                                    <h3 className="text-sm font-black text-zinc-800 uppercase tracking-widest">How to Resolve Issues</h3>
+                                    {[
+                                        {
+                                            title: '🚨 Duplicate email (HIGH)',
+                                            body:  'One person registered more than once with different matric numbers. Go to Supabase → Table Editor → Voters, find all rows with that email, and delete the fraudulent one. Keep the row where the matric number matches the student\'s real university ID.',
+                                        },
+                                        {
+                                            title: '⚠️ Duplicate name (MEDIUM)',
+                                            body:  'Two registrations share the same full name. This may be two different students with the same name — cross-check their matric numbers and emails against university records. If it\'s the same person registered twice, delete the duplicate row.',
+                                        },
+                                        {
+                                            title: '✅ After resolving',
+                                            body:  'Click "Run Check" again to confirm the issues are gone before opening the election. This check is also logged in the Audit Log so the EC has a record that it was performed.',
+                                        },
+                                    ].map(item => (
+                                        <div key={item.title} className="bg-zinc-50 rounded-xl px-4 py-3">
+                                            <p className="text-xs font-black text-zinc-800 mb-1">{item.title}</p>
+                                            <p className="text-xs text-zinc-500 font-medium leading-relaxed">{item.body}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    {/* Prompt to run if not run yet */}
+                    {!integrityData && !integrityLoading && (
+                        <div className="bg-white rounded-2xl border-2 border-zinc-200 p-10 text-center">
+                            <p className="text-4xl mb-3">🛡️</p>
+                            <p className="text-sm font-black text-zinc-700 uppercase tracking-widest mb-2">Run Before Opening the Election</p>
+                            <p className="text-xs text-zinc-400 font-medium max-w-sm mx-auto">
+                                Click "Run Check" above to scan for duplicate registrations, suspicious emails, and potential fraud before votes are cast.
+                            </p>
+                        </div>
+                    )}
                 </div>
             )}
 
