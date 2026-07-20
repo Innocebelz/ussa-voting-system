@@ -119,7 +119,7 @@ const Login: React.FC = () => {
 
         {/* Fine print */}
         <p className="mt-5 text-center text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
-          By continuing, you agree to the USSA election guidelines.
+          By continuing, you agree to the USAA election guidelines.
         </p>
       </div>
   );

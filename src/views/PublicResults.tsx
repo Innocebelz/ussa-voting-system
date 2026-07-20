@@ -150,7 +150,7 @@ const PublicResults: React.FC = () => {
           Official Results
         </span>
                 <h1 className="text-3xl sm:text-4xl font-black text-zinc-900 uppercase tracking-tight mt-2">
-                    USSA General Election
+                    USAA General Election
                 </h1>
                 <p className="text-zinc-400 text-sm font-medium mt-1">
                     Final results · Algeria 2026

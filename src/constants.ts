@@ -1,7 +1,7 @@
 import { ElectionCategory } from './types';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// USSA ELECTION DATA 2026
+// USAA ELECTION DATA 2026
 //
 // HOW TO UPDATE:
 //   • Add/remove candidates inside any `candidates` array.
@@ -86,7 +86,7 @@ export const ELECTION_DATA: ElectionCategory[] = [
       {
         id: 'mfin_1',
         name: 'Wamala Barnabas',
-        manifesto: 'Transparent financial management and secure funding initiatives for USSA.',
+        manifesto: 'Transparent financial management and secure funding initiatives for USAA.',
         image: 'https://res.cloudinary.com/dbdgbj4qz/image/upload/v1781651676/antony_fwcp2k.jpg',
       },
     ],

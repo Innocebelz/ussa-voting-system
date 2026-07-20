@@ -184,7 +184,7 @@ const AdminDashboard: React.FC = () => {
         });
         const link  = document.createElement('a');
         link.href   = encodeURI('data:text/csv;charset=utf-8,' + csv);
-        link.setAttribute('download', `ussa_results_${new Date().toISOString().split('T')[0]}.csv`);
+        link.setAttribute('download', `usaa_results_${new Date().toISOString().split('T')[0]}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);

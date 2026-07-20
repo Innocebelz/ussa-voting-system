@@ -27,7 +27,7 @@ const ElectionBot: React.FC = () => {
         {
             id: 'welcome-msg',
             role: 'bot',
-            text: "Hello! 🤖 I'm the U.S.S.A Election Assistant. I can help with OTPs, unopposed candidates, receipt verification, and results timing. Choose a quick action or ask me anything.",
+            text: "Hello! 🤖 I'm the U.S.A.A Election Assistant. I can help with OTPs, unopposed candidates, receipt verification, and results timing. Choose a quick action or ask me anything.",
         },
     ]);
 

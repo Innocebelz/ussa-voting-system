@@ -47,12 +47,12 @@ def verify_password(password: str, stored_hash: str) -> bool:
 # App Setup
 # ---------------------------------------------------------------------------
 
-app = FastAPI(title="USSA Voting API")
+app = FastAPI(title="USAA Voting API")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://ussa-voting-system.vercel.app",
+        "https://usaa-voting-system.vercel.app",
         "http://localhost:5173",
         "http://localhost:3000",
     ],
@@ -86,7 +86,7 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
 
 def normalize_matric_number(matric_number: str) -> str:
     """
-    Canonicalize USSA matric numbers so year-prefixed entries still match.
+    Canonicalize USAA matric numbers so year-prefixed entries still match.
 
     Examples:
       20258UGA28109 -> 8UGA28109
@@ -386,7 +386,7 @@ def _otp_html(otp_code: str, voter_name: str = "") -> str:
                 <div style="text-align:center;margin-bottom:28px;">
                     <img
                         src="{LOGO_URL}"
-                        alt="USSA Logo"
+                        alt="USAA Logo"
                         width="72"
                         height="72"
                         style="border-radius:50%;border:3px solid #eab308;
@@ -397,7 +397,7 @@ def _otp_html(otp_code: str, voter_name: str = "") -> str:
                     <h2 style="margin:0;color:#18181b;font-size:18px;
                                letter-spacing:2px;text-transform:uppercase;
                                font-weight:900;">
-                        U.S.S.A Electoral Commission
+                        U.S.A.A Electoral Commission
                     </h2>
                     <p style="margin:4px 0 0;color:#eab308;font-size:10px;
                               font-weight:bold;letter-spacing:3px;
@@ -411,7 +411,7 @@ def _otp_html(otp_code: str, voter_name: str = "") -> str:
                 </p>
                 <p style="color:#3f3f46;font-size:14px;margin:0 0 24px;line-height:1.6;">
                     Your one-time verification code for the
-                    <strong>U.S.S.A General Election</strong> is:
+                    <strong>U.S.A.A General Election</strong> is:
                 </p>
 
                 <div style="background:#18181b;border-radius:12px;
@@ -448,7 +448,7 @@ def _otp_html(otp_code: str, voter_name: str = "") -> str:
 
             <div style="background:#18181b;padding:16px 32px;text-align:center;">
                 <p style="margin:0;color:#71717a;font-size:11px;">
-                    © 2026 U.S.S.A Electoral Committee · Algeria
+                    © 2026 U.S.A.A Electoral Committee · Algeria
                 </p>
             </div>
         </div>
@@ -467,7 +467,7 @@ def _confirmation_html(voter_name: str, ballot_id: str) -> str:
                 <div style="text-align:center;margin-bottom:24px;">
                     <h2 style="margin:0;color:#18181b;font-size:20px;
                                letter-spacing:1px;text-transform:uppercase;">
-                        U.S.S.A Electoral Commission
+                        U.S.A.A Electoral Commission
                     </h2>
                     <p style="margin:4px 0 0;color:#eab308;font-size:11px;
                               font-weight:bold;letter-spacing:2px;text-transform:uppercase;">
@@ -487,7 +487,7 @@ def _confirmation_html(voter_name: str, ballot_id: str) -> str:
                 </p>
                 <p style="color:#3f3f46;font-size:14px;margin:0 0 20px;line-height:1.6;">
                     Your ballot has been successfully submitted for the
-                    <strong>U.S.S.A General Elections</strong>.
+                    <strong>U.S.A.A General Elections</strong>.
                     Your vote is anonymous — it cannot be linked back to you by
                     anyone, including the Electoral Commission.
                 </p>
@@ -519,7 +519,7 @@ def _confirmation_html(voter_name: str, ballot_id: str) -> str:
 
             <div style="background:#18181b;padding:16px 32px;text-align:center;">
                 <p style="margin:0;color:#71717a;font-size:11px;">
-                    © 2026 U.S.S.A Electoral Committee · Algeria
+                    © 2026 U.S.A.A Electoral Committee · Algeria
                 </p>
             </div>
         </div>
@@ -545,11 +545,11 @@ def send_confirmation_email(receiver_email: str, voter_name: str, ballot_id: str
             },
             json={
                 "sender": {
-                    "name":  "USSA Electoral Commission",
+                    "name":  "USAA Electoral Commission",
                     "email": sender_email,
                 },
                 "to":          [{"email": receiver_email, "name": voter_name}],
-                "subject":     "✓ Your USSA ballot has been received",
+                "subject":     "✓ Your USAA ballot has been received",
                 "htmlContent": _confirmation_html(voter_name, ballot_id),
             },
             timeout=10,
@@ -583,11 +583,11 @@ def send_otp_email(receiver_email: str, otp_code: str, voter_name: str = ""):
             },
             json={
                 "sender": {
-                    "name":  "USSA Electoral Commission",
+                    "name":  "USAA Electoral Commission",
                     "email": sender_email,
                 },
                 "to":          [{"email": receiver_email, "name": voter_name}],
-                "subject":     "USSA Election — Your Verification Code",
+                "subject":     "USAA Election — Your Verification Code",
                 "htmlContent": _otp_html(otp_code, voter_name),
             },
             timeout=10,
@@ -1277,7 +1277,7 @@ def chat_assistant(payload: ChatMessage):
 
     # 6. Default Fallback
     else:
-        reply = "Hello! 🤖 I'm the U.S.S.A Election Assistant. I can help answer questions about getting your OTP, how to handle unopposed candidates, verifying your receipt, or when results will be published. How can I help?"
+        reply = "Hello! 🤖 I'm the U.S.A.A Election Assistant. I can help answer questions about getting your OTP, how to handle unopposed candidates, verifying your receipt, or when results will be published. How can I help?"
 
     return {"status": "success", "reply": reply}
 

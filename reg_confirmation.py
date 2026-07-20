@@ -37,7 +37,7 @@ def _registration_html(voter_name: str, matric_number: str, email: str) -> str:
                 <div style="text-align:center;margin-bottom:24px;">
                     <h2 style="margin:0;color:#18181b;font-size:20px;
                                letter-spacing:1px;text-transform:uppercase;">
-                        U.S.S.A Electoral Commission
+                        U.S.A.A Electoral Commission
                     </h2>
                     <p style="margin:4px 0 0;color:#eab308;font-size:11px;
                               font-weight:bold;letter-spacing:2px;text-transform:uppercase;">
@@ -57,7 +57,7 @@ def _registration_html(voter_name: str, matric_number: str, email: str) -> str:
                 </p>
                 <p style="color:#3f3f46;font-size:14px;margin:0 0 20px;line-height:1.6;">
                     You have been successfully registered as an eligible voter for the
-                    upcoming <strong>U.S.S.A General Elections</strong>.
+                    upcoming <strong>U.S.A.A General Elections</strong>.
                 </p>
 
                 <div style="background:#fafafa;border:2px solid #e4e4e7;border-radius:8px;
@@ -89,7 +89,7 @@ def _registration_html(voter_name: str, matric_number: str, email: str) -> str:
 
             <div style="background:#18181b;padding:16px 32px;text-align:center;">
                 <p style="margin:0;color:#71717a;font-size:11px;">
-                    © 2026 U.S.S.A Electoral Committee · Algeria
+                    © 2026 U.S.A.A Electoral Committee · Algeria
                 </p>
             </div>
         </div>
@@ -112,11 +112,11 @@ def send_registration_email(receiver_email: str, voter_name: str, matric_number:
             },
             json={
                 "sender": {
-                    "name":  "USSA Electoral Commission",
+                    "name":  "USAA Electoral Commission",
                     "email": BREVO_SENDER_EMAIL,
                 },
                 "to":          [{"email": receiver_email, "name": voter_name}],
-                "subject":     "✓ You are registered to vote — USSA General Election",
+                "subject":     "✓ You are registered to vote — USAA General Election",
                 "htmlContent": _registration_html(voter_name, matric_number, receiver_email),
             },
             timeout=10,

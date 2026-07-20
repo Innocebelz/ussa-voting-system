@@ -1,6 +1,6 @@
-# USSA Voting System
+# USAA Voting System
 
-A secure, mobile-first, anonymous electronic voting portal built for the **Uganda Students' Association in Algeria (U.S.S.A)** general elections. Supports ~600 registered student voters across 7 ballot positions, with full EC oversight, per-member admin logins, a complete audit log, and a public ballot verification system.
+A secure, mobile-first, anonymous electronic voting portal built for the **Uganda Students' Association in Algeria (U.S.A.A)** general elections. Supports ~600 registered student voters across 7 ballot positions, with full EC oversight, per-member admin logins, a complete audit log, and a public ballot verification system.
 
 ---
 
@@ -66,7 +66,7 @@ FastAPI backend (Render)
 - **Mobile-first ballot** — compact candidate rows, manifesto toggle, progress bar, sticky submit
 - **Confirm modal** — full summary of all 7 selections before final submission
 - **Ballot receipt** — unique UUID returned after voting; stored in confirmation email
-- **Vote confirmation email** — USSA-branded HTML email sent immediately after ballot is recorded
+- **Vote confirmation email** — USAA-branded HTML email sent immediately after ballot is recorded
 - **Public results page** — `/election-results`, no login required, live after EC closes the election
 - **Ballot verification** — paste receipt UUID to confirm ballot was counted (yes/no only, no choices revealed)
 - **Session expiry** — auth state clears after 12 hours; voters always start fresh on a new day
@@ -254,7 +254,7 @@ The script uses `ON CONFLICT DO UPDATE` — re-running it is safe and will updat
 
 ### Custom Domain (optional)
 
-Purchase a domain (e.g. `ussavoting.com` from Namecheap) and connect it in Vercel → Settings → Domains. Follow the DNS instructions. The connection to Vercel is free.
+Purchase a domain (e.g. `usaavoting.com` from Namecheap) and connect it in Vercel → Settings → Domains. Follow the DNS instructions. The connection to Vercel is free.
 
 ---
 

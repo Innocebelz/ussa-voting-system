@@ -96,14 +96,14 @@ const Layout: React.FC = () => {
                 <div className="flex items-center space-x-4">
                     <div
                         onClick={handleSecretClick}
-                        title="U.S.S.A"
+                        title="U.S.A.A"
                         className={`w-14 h-14 rounded-full flex items-center justify-center shrink-0 cursor-pointer select-none overflow-hidden border-2 border-yellow-500 transition-transform duration-150 ${logoScale ? 'scale-110' : 'scale-100'}`}
                     >
                         {LOGO_URL ? (
-                            <img src={LOGO_URL} alt="USSA Logo" className="w-full h-full object-cover rounded-full" />
+                            <img src={LOGO_URL} alt="USAA Logo" className="w-full h-full object-cover rounded-full" />
                         ) : (
                             <div className="w-full h-full bg-yellow-500 flex items-center justify-center">
-                                <span className="text-zinc-900 font-black text-sm tracking-tight">USSA</span>
+                                <span className="text-zinc-900 font-black text-sm tracking-tight">USAA</span>
                             </div>
                         )}
                     </div>
