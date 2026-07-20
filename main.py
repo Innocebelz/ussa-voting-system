@@ -1257,7 +1257,7 @@ def chat_assistant(payload: ChatMessage):
     # 1. ESCALATED OTP Issues (Check this FIRST!)
     if ("otp" in msg or "code" in msg or "email" in msg or "spam" in msg) and \
             ("still" in msg or "already" in msg or "can't" in msg or "cant" in msg or "tried" in msg or "nothing" in msg):
-        reply = "Since you have already checked your spam and requested a new code, there might be a typo in your registered email in the database. Please contact the Electoral Commission directly at electoralcommission231@gmail.com for manual verification."
+        reply = "Since you have already checked your spam and requested a new code, there might be a typo in your registered email in the database. Please contact the Electoral Commission directly at electoralcommissiom231@gmail.com for manual verification."
 
     # 2. Standard OTP & Login Issues
     elif "otp" in msg or "code" in msg or "spam" in msg or "email" in msg:
@@ -1265,7 +1265,7 @@ def chat_assistant(payload: ChatMessage):
 
     # 3. Results & Tally
     elif "result" in msg or "tally" in msg or "winner" in msg or "close" in msg or "publish" in msg:
-        reply = "The election results are strictly confidential while voting is open. Once the Electoral Commission officially closes the polls, the final tally will automatically appear here: https://ussa-voting-system.vercel.app/election-results"
+        reply = "The election results are strictly confidential while voting is open. Once the Electoral Commission officially closes the polls, the final tally will automatically appear here: https://usaa-voting-system.vercel.app/election-results"
 
     # 4. Voting Rules (The 50% Rule & Unopposed)
     elif "unopposed" in msg or "blank" in msg or "skip" in msg:

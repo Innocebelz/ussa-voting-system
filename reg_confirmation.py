@@ -83,7 +83,7 @@ def _registration_html(voter_name: str, matric_number: str, email: str) -> str:
                 <p style="color:#a1a1aa;font-size:12px;text-align:center;margin:0;line-height:1.6;">
                     If any of these details are incorrect, or if you did not register
                     yourself, please contact the Electoral Commission immediately at
-                    electoralcommission231@gmail.com
+                    electoralcommissiom231@gmail.com
                 </p>
             </div>
 
