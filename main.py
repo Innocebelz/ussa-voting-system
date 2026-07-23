@@ -369,8 +369,7 @@ def log_audit(
 # ---------------------------------------------------------------------------
 
 def _otp_html(otp_code: str, voter_name: str = "") -> str:
-    # TODO: replace with your real Cloudinary logo URL once uploaded
-    LOGO_URL = "https://res.cloudinary.com/REPLACE/image/upload/REPLACE/ussa_logo.png"
+    LOGO_URL = "https://res.cloudinary.com/dbdgbj4qz/image/upload/v1782139265/logo_ze2vq7.jpg"
 
     greeting = f"Hello <strong>{voter_name}</strong>," if voter_name else "Hello,"
 
@@ -887,7 +886,6 @@ def pre_election_integrity_check(conn=Depends(get_db), admin=Depends(require_adm
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
 
         # ── Check 1: Duplicate emails ──────────────────────────────────────
-        # FIX: Added LOWER(email) in the SELECT to strictly match the GROUP BY clause
         cur.execute("""
                     SELECT LOWER(email) as email,
                            COUNT(*) as count,
@@ -978,12 +976,23 @@ def get_public_results(conn=Depends(get_db)):
             "message": "The election is still in progress. Results will be published once voting closes.",
         }
 
-    # Turnout
+    # Turnout — total_eligible and votes_cast come from Voters, used for the
+    # public "turnout %" display only.
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("SELECT COUNT(*) as total FROM Voters")
         total = cur.fetchone()["total"]
         cur.execute("SELECT COUNT(*) as cast FROM Voters WHERE has_voted = TRUE")
         cast = cur.fetchone()["cast"]
+
+        # total_ballots_cast is the SAME table every position's tally below
+        # is computed from. This is the number the frontend must use for
+        # any per-position percentage or 50% threshold — using `cast` above
+        # (sourced from Voters.has_voted) instead can silently diverge from
+        # the real ballot count (e.g. test data, manual DB edits), producing
+        # impossible percentages like 250%. Ballots is the single source of
+        # truth for actual votes cast.
+        cur.execute("SELECT COUNT(*) as ballot_count FROM Ballots")
+        total_ballots_cast = cur.fetchone()["ballot_count"]
 
     # Full tally per position
     positions = [
@@ -1009,6 +1018,7 @@ def get_public_results(conn=Depends(get_db)):
         "turnout": {
             "total_eligible":     total,
             "votes_cast":         cast,
+            "total_ballots_cast": total_ballots_cast,
             "turnout_percentage": round((cast / total * 100)) if total > 0 else 0,
         },
         "results": tally,
@@ -1266,8 +1276,6 @@ def chat_assistant(payload: ChatMessage):
     reply = None
 
     # ── 1. ESCALATION: persistent OTP issues ────────────────────────────────
-    # Checked first so "still nothing after checking spam" doesn't just
-    # get the generic OTP answer again.
     if contains_any(["otp", "code", "email", "spam"]) and \
             contains_any(["still", "already", "can't", "cant", "tried", "nothing", "not working", "not received"]):
         reply = (
@@ -1288,9 +1296,9 @@ def chat_assistant(payload: ChatMessage):
     elif contains_any(["invalid", "wrong code", "incorrect code", "doesn't work", "does not work"]) and "otp" in msg or \
             contains_any(["invalid otp", "wrong otp", "incorrect otp"]):
         reply = (
-            "Make sure you're entering the MOST RECENT code — if you requested more than one, "
+            "Make sure you're entering the MOST RECENT code, if you requested more than one, "
             "only the last one is valid. Double-check all 6 digits. If it's been more than 5 "
-            "minutes since you received it, it has expired — tap 'Resend Code' for a fresh one."
+            "minutes since you received it, it has expired: tap 'Resend Code' for a fresh one."
         )
 
     # ── 4. Matric number not found / login issues ───────────────────────────
@@ -1315,8 +1323,8 @@ def chat_assistant(payload: ChatMessage):
     elif contains_any(["anonymous", "anonymity", "privacy", "who i voted", "see my vote", "trace my vote", "linked to me"]):
         reply = (
             "Your vote is fully anonymous. When you vote, your ballot is stored with a random, "
-            "unique code — not your matriculation number. There is no record anywhere in the system "
-            "that links your identity to your specific choices, so nobody — not the Electoral "
+            "unique code not your matriculation number. There is no record anywhere in the system "
+            "that links your identity to your specific choices, so nobody even the Electoral "
             "Commission, can see who you voted for."
         )
 
@@ -1326,7 +1334,7 @@ def chat_assistant(payload: ChatMessage):
             "After voting, you receive a unique receipt code (a long string like "
             "'c8a428a8-aba5-...'). Once the Electoral Commission closes the election, go to the "
             "public results page and paste that code into the 'Verify Your Ballot' box. It will "
-            "confirm whether your ballot was counted — without revealing your actual choices. "
+            "confirm whether your ballot was counted without revealing your actual choices. "
             "Keep your receipt code safe (screenshot it) right after you vote, since it's only "
             "shown once."
         )
@@ -1337,7 +1345,7 @@ def chat_assistant(payload: ChatMessage):
             "Results are strictly confidential while voting is open — this protects the election "
             "from being influenced mid-vote. Once the Electoral Commission officially closes the "
             "polls, the full tally, turnout, and winners for all 7 positions automatically appear at: "
-            "https://ussa-voting-system.vercel.app/election-results — no login needed to view it."
+            "https://usaa-voting-system.vercel.app/election-results — no login needed to view it."
         )
 
     # ── 9. Unopposed candidates / abstention / blank votes ──────────────────
@@ -1352,7 +1360,7 @@ def chat_assistant(payload: ChatMessage):
     # ── 10. Session expired / logged out ────────────────────────────────────
     elif contains_any(["session expired", "logged out", "signed out", "keeps logging", "session ended"]):
         reply = (
-            "Voter sessions automatically expire after 12 hours for security — this protects your "
+            "Voter sessions automatically expire after 12 hours for security this protects your "
             "vote if you ever leave your phone unattended. Simply log in again with your "
             "matriculation number and you'll get a fresh OTP code."
         )
@@ -1360,7 +1368,7 @@ def chat_assistant(payload: ChatMessage):
     # ── 11. Changing / editing a submitted vote ─────────────────────────────
     elif contains_any(["change my vote", "edit my vote", "made a mistake", "wrong candidate", "undo"]):
         reply = (
-            "Once you confirm and submit your ballot, it cannot be changed or undone — this is by "
+            "Once you confirm and submit your ballot, it cannot be changed or undone this is by "
             "design, to protect the integrity of the election. Before you submit, a confirmation "
             "screen shows all 7 of your selections so you can review them carefully first. Take "
             "your time on that screen before tapping 'Yes, Submit My Ballot'."
@@ -1393,13 +1401,13 @@ def chat_assistant(payload: ChatMessage):
     elif contains_any(["hi", "hello", "hey", "good morning", "good afternoon", "good evening"]) and len(msg) < 25:
         reply = (
             "Hello! 👋 I'm the U.S.A.A Election Assistant. Ask me about OTP codes, unopposed "
-            "candidates, ballot verification, or when results will be published — or use one of "
+            "candidates, ballot verification, or when results will be published or use one of "
             "the quick action buttons above."
         )
 
     # ── 16. Thanks / closing ─────────────────────────────────────────────────
     elif contains_any(["thank", "thanks", "appreciate", "cheers"]):
-        reply = "You're welcome! Good luck with your vote — every ballot matters. 🗳️"
+        reply = "You're welcome! Good luck with your vote every ballot matters. 🗳️"
 
     # ── 17. Default fallback ──────────────────────────────────────────────────
     else:

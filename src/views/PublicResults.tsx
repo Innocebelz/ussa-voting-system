@@ -7,7 +7,6 @@ import {
 
 const BACKEND_URL = 'https://laa-voting-system.onrender.com';
 
-// ── Count-up animation hook ───────────────────────────────────────────────────
 function useCountUp(target: number, duration = 1200, delay = 0) {
     const [value, setValue] = useState(0);
     const raf = useRef<number>(0);
@@ -30,17 +29,21 @@ function useCountUp(target: number, duration = 1200, delay = 0) {
 
 interface CandidateResult { candidate_id: string; votes: number; }
 interface Tally { [position: string]: CandidateResult[]; }
-interface Turnout { total_eligible: number; votes_cast: number; turnout_percentage: number; }
+interface Turnout {
+    total_eligible: number;
+    votes_cast: number;
+    total_ballots_cast: number;   // source of truth for per-position % and 50% threshold
+    turnout_percentage: number;
+}
 
 const PublicResults: React.FC = () => {
-    const [status, setStatus]           = useState<'loading' | 'in_progress' | 'closed'>('loading');
-    const [tally, setTally]             = useState<Tally | null>(null);
-    const [turnout, setTurnout]         = useState<Turnout | null>(null);
-    const [visible, setVisible]         = useState(false);
+    const [status, setStatus] = useState<'loading' | 'in_progress' | 'closed'>('loading');
+    const [tally, setTally] = useState<Tally | null>(null);
+    const [turnout, setTurnout] = useState<Turnout | null>(null);
+    const [visible, setVisible] = useState(false);
 
-    // Ballot verification
     const [receiptInput, setReceiptInput] = useState('');
-    const [verifying, setVerifying]       = useState(false);
+    const [verifying, setVerifying] = useState(false);
     const [verifyResult, setVerifyResult] = useState<'counted' | 'not_found' | null>(null);
 
     useEffect(() => {
@@ -51,7 +54,7 @@ const PublicResults: React.FC = () => {
     useEffect(() => {
         const fetchResults = async () => {
             try {
-                const res  = await fetch(`${BACKEND_URL}/api/public/results`);
+                const res = await fetch(`${BACKEND_URL}/api/public/results`);
                 const data = await res.json();
                 if (data.status === 'in_progress') {
                     setStatus('in_progress');
@@ -73,7 +76,7 @@ const PublicResults: React.FC = () => {
         try {
             setVerifyResult(null);
             setVerifying(true);
-            const res  = await fetch(`${BACKEND_URL}/api/verify-ballot/${encodeURIComponent(receiptInput.trim())}`);
+            const res = await fetch(`${BACKEND_URL}/api/verify-ballot/${encodeURIComponent(receiptInput.trim())}`);
             const data = await res.json();
             setVerifyResult(data.counted ? 'counted' : 'not_found');
         } catch {
@@ -83,29 +86,27 @@ const PublicResults: React.FC = () => {
         }
     };
 
-    // Build full results merging ELECTION_DATA with live tally
     const buildResults = (dbKey: string) => {
         const category = ELECTION_DATA.find(c => c.dbKey === dbKey);
         if (!category || !tally) return null;
-        const raw      = tally[dbKey] ?? [];
-        const voteMap  = Object.fromEntries(raw.map(r => [r.candidate_id, r.votes]));
-        const total    = raw.reduce((s, r) => s + r.votes, 0);
+        const raw = tally[dbKey] ?? [];
+        const voteMap = Object.fromEntries(raw.map(r => [r.candidate_id, r.votes]));
+        const total = raw.reduce((s, r) => s + r.votes, 0);
         const candidates = category.candidates
             .map(c => ({ ...c, votes: voteMap[c.id] ?? 0 }))
             .sort((a, b) => b.votes - a.votes);
         return { label: category.position, candidates, total };
     };
 
-    const positionKeys  = ELECTION_DATA.map(c => c.dbKey);
-    const animPct       = useCountUp(turnout?.turnout_percentage ?? 0, 1200, 400);
-    const animCast      = useCountUp(turnout?.votes_cast          ?? 0, 1000, 500);
-    const animEligible  = useCountUp(turnout?.total_eligible      ?? 0, 1000, 600);
+    const positionKeys = ELECTION_DATA.map(c => c.dbKey);
+    const animPct = useCountUp(turnout?.turnout_percentage ?? 0, 1200, 400);
+    const animCast = useCountUp(turnout?.votes_cast ?? 0, 1000, 500);
+    const animEligible = useCountUp(turnout?.total_eligible ?? 0, 1000, 600);
 
-    const R       = 15.9155;
+    const R = 15.9155;
     const CIRCUMF = 2 * Math.PI * R;
-    const offset  = CIRCUMF - (animPct / 100) * CIRCUMF;
+    const offset = CIRCUMF - (animPct / 100) * CIRCUMF;
 
-    // ── Loading ─────────────────────────────────────────────────────────────────
     if (status === 'loading') return (
         <div className="flex flex-col items-center justify-center flex-1 gap-4 text-zinc-500">
             <Loader2 className="w-8 h-8 animate-spin text-yellow-500" />
@@ -113,7 +114,6 @@ const PublicResults: React.FC = () => {
         </div>
     );
 
-    // ── Election still open ──────────────────────────────────────────────────────
     if (status === 'in_progress') return (
         <div className={`w-full max-w-lg mx-auto self-center transition-all duration-500 ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
             <div className="bg-white rounded-2xl border-2 border-zinc-200 overflow-hidden shadow-sm text-center">
@@ -132,23 +132,21 @@ const PublicResults: React.FC = () => {
                     <div className="mt-6 flex items-center justify-center gap-2">
                         <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                         <span className="text-xs font-black text-zinc-400 uppercase tracking-widest">
-              Accepting votes now
-            </span>
+                            Accepting votes now
+                        </span>
                     </div>
                 </div>
             </div>
         </div>
     );
 
-    // ── Results published ────────────────────────────────────────────────────────
     return (
         <div className={`w-full max-w-3xl mx-auto space-y-6 py-2 transition-all duration-500 ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
 
-            {/* ── Header ─────────────────────────────────────────────────────────── */}
             <div className="text-center pb-4 border-b-2 border-zinc-200">
-        <span className="text-[10px] font-black bg-zinc-900 text-yellow-400 px-3 py-1 rounded-full uppercase tracking-widest mb-3 inline-block border border-yellow-500">
-          Official Results
-        </span>
+                <span className="text-[10px] font-black bg-zinc-900 text-yellow-400 px-3 py-1 rounded-full uppercase tracking-widest mb-3 inline-block border border-yellow-500">
+                    Official Results
+                </span>
                 <h1 className="text-3xl sm:text-4xl font-black text-zinc-900 uppercase tracking-tight mt-2">
                     USAA General Election
                 </h1>
@@ -157,7 +155,6 @@ const PublicResults: React.FC = () => {
                 </p>
             </div>
 
-            {/* ── Turnout ────────────────────────────────────────────────────────── */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
 
                 <div className="bg-white rounded-2xl border-2 border-zinc-200 overflow-hidden">
@@ -200,7 +197,6 @@ const PublicResults: React.FC = () => {
                 </div>
             </div>
 
-            {/* ── Position results ────────────────────────────────────────────────── */}
             <div className="space-y-4">
                 {positionKeys.map(dbKey => {
                     const result = buildResults(dbKey);
@@ -213,7 +209,6 @@ const PublicResults: React.FC = () => {
                             <div className="h-1 bg-yellow-500" />
                             <div className="p-5">
 
-                                {/* Position label + total */}
                                 <div className="flex items-center justify-between mb-4 pb-3 border-b-2 border-zinc-100">
                                     <h2 className="text-sm font-black text-zinc-800 uppercase tracking-widest">
                                         {label}
@@ -227,7 +222,14 @@ const PublicResults: React.FC = () => {
                                     {candidates.map((candidate, index) => {
 
                                         // ── THE 50% CONSTITUTIONAL RULE MATH ────────────────────────────────
-                                        const totalBallotsCast = turnout?.votes_cast || 0;
+                                        // Uses total_ballots_cast (counted directly from the Ballots table
+                                        // on the backend) rather than turnout.votes_cast (counted from
+                                        // Voters.has_voted). Both should normally agree, but only Ballots is
+                                        // the actual source every position's tally above is computed from —
+                                        // using it here guarantees the percentage can never exceed 100%,
+                                        // even if the two tables ever fall out of sync (e.g. test data,
+                                        // manual DB edits).
+                                        const totalBallotsCast = turnout?.total_ballots_cast ?? turnout?.votes_cast ?? 0;
                                         let isWinner = false;
                                         let failedVoteOfConfidence = false;
 
@@ -241,7 +243,9 @@ const PublicResults: React.FC = () => {
                                             isWinner = index === 0 && candidate.votes > 0 && (!nextCandidate || candidate.votes > nextCandidate.votes);
                                         }
 
-                                        // For unopposed, calculate percentage out of TOTAL TURNOUT, not just position total
+                                        // For unopposed, calculate percentage out of TOTAL BALLOTS CAST,
+                                        // not just this position's own total — this is what makes the
+                                        // "50% of everyone who voted" rule meaningful.
                                         const baseTotal = category?.unopposed ? totalBallotsCast : total;
                                         const pct = baseTotal > 0 ? Math.round((candidate.votes / baseTotal) * 100) : 0;
 
@@ -249,9 +253,7 @@ const PublicResults: React.FC = () => {
                                             <div key={candidate.id}>
                                                 <div className="flex items-center gap-3 mb-2">
 
-                                                    {/* Winner trophy / Status Icon */}
-                                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
-                                                        isWinner ? 'bg-yellow-400' : (failedVoteOfConfidence ? 'bg-red-50' : 'bg-zinc-100')
+                                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${isWinner ? 'bg-yellow-400' : (failedVoteOfConfidence ? 'bg-red-50' : 'bg-zinc-100')
                                                     }`}>
                                                         {isWinner
                                                             ? <Trophy className="w-3.5 h-3.5 text-zinc-900" />
@@ -261,7 +263,6 @@ const PublicResults: React.FC = () => {
                                                         }
                                                     </div>
 
-                                                    {/* Photo */}
                                                     <img
                                                         src={candidate.image}
                                                         alt={candidate.name}
@@ -269,16 +270,13 @@ const PublicResults: React.FC = () => {
                                                             (e.target as HTMLImageElement).src =
                                                                 `https://ui-avatars.com/api/?name=${encodeURIComponent(candidate.name)}&background=18181b&color=eab308&size=128`;
                                                         }}
-                                                        className={`w-10 h-10 rounded-full object-cover border-2 shrink-0 ${
-                                                            isWinner ? 'border-yellow-400' : (failedVoteOfConfidence ? 'border-red-300' : 'border-zinc-200')
+                                                        className={`w-10 h-10 rounded-full object-cover border-2 shrink-0 ${isWinner ? 'border-yellow-400' : (failedVoteOfConfidence ? 'border-red-300' : 'border-zinc-200')
                                                         }`}
                                                     />
 
-                                                    {/* Name + winner/failed badge */}
                                                     <div className="flex-1 min-w-0">
                                                         <div className="flex items-center gap-2 flex-wrap">
-                                                            <span className={`font-black text-sm uppercase ${
-                                                                isWinner ? 'text-zinc-900' : (failedVoteOfConfidence ? 'text-red-700' : 'text-zinc-500')
+                                                            <span className={`font-black text-sm uppercase ${isWinner ? 'text-zinc-900' : (failedVoteOfConfidence ? 'text-red-700' : 'text-zinc-500')
                                                             }`}>
                                                                 {candidate.name}
                                                             </span>
@@ -295,10 +293,8 @@ const PublicResults: React.FC = () => {
                                                         </div>
                                                     </div>
 
-                                                    {/* Votes + pct */}
                                                     <div className="text-right shrink-0">
-                                                        <span className={`text-2xl font-black tabular-nums ${
-                                                            isWinner ? 'text-yellow-600' : (failedVoteOfConfidence ? 'text-red-500' : 'text-zinc-400')
+                                                        <span className={`text-2xl font-black tabular-nums ${isWinner ? 'text-yellow-600' : (failedVoteOfConfidence ? 'text-red-500' : 'text-zinc-400')
                                                         }`}>
                                                             {candidate.votes}
                                                         </span>
@@ -306,11 +302,9 @@ const PublicResults: React.FC = () => {
                                                     </div>
                                                 </div>
 
-                                                {/* Vote bar */}
                                                 <div className="ml-10 h-2.5 bg-zinc-100 rounded-full overflow-hidden">
                                                     <div
-                                                        className={`h-full rounded-full transition-all duration-700 ease-out ${
-                                                            isWinner ? 'bg-yellow-400' : (failedVoteOfConfidence ? 'bg-red-400' : 'bg-zinc-300')
+                                                        className={`h-full rounded-full transition-all duration-700 ease-out ${isWinner ? 'bg-yellow-400' : (failedVoteOfConfidence ? 'bg-red-400' : 'bg-zinc-300')
                                                         }`}
                                                         style={{ width: `${pct}%` }}
                                                     />
@@ -325,7 +319,6 @@ const PublicResults: React.FC = () => {
                 })}
             </div>
 
-            {/* ── Ballot verification ─────────────────────────────────────────────── */}
             <div className="bg-white rounded-2xl border-2 border-zinc-200 overflow-hidden">
                 <div className="h-1.5 bg-zinc-900 w-full" />
                 <div className="p-6">
@@ -362,19 +355,16 @@ const PublicResults: React.FC = () => {
                         </button>
                     </form>
 
-                    {/* Result */}
                     {verifyResult && (
-                        <div className={`mt-4 flex items-center gap-3 px-4 py-3 rounded-xl border-2 ${
-                            verifyResult === 'counted'
-                                ? 'bg-green-50 border-green-200'
-                                : 'bg-red-50 border-red-200'
+                        <div className={`mt-4 flex items-center gap-3 px-4 py-3 rounded-xl border-2 ${verifyResult === 'counted'
+                            ? 'bg-green-50 border-green-200'
+                            : 'bg-red-50 border-red-200'
                         }`}>
                             {verifyResult === 'counted'
                                 ? <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />
-                                : <XCircle     className="w-5 h-5 text-red-500 shrink-0" />
+                                : <XCircle className="w-5 h-5 text-red-500 shrink-0" />
                             }
-                            <p className={`text-sm font-bold ${
-                                verifyResult === 'counted' ? 'text-green-800' : 'text-red-700'
+                            <p className={`text-sm font-bold ${verifyResult === 'counted' ? 'text-green-800' : 'text-red-700'
                             }`}>
                                 {verifyResult === 'counted'
                                     ? '✓ Your ballot was counted in the final results.'
