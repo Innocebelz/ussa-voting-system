@@ -74,8 +74,7 @@ def _registration_html(voter_name: str, matric_number: str, email: str) -> str:
 
                 <p style="color:#3f3f46;font-size:13px;margin:0 0 16px;line-height:1.6;">
                     When voting opens, you will receive a separate one-time verification
-                    code by email to <strong>{email}</strong>. You will not need a password —
-                    just your matriculation number and the code we send you at that time.
+                    code by email to <strong>{email}</strong>. You will not need a password, just your matriculation number and the code we send you at that time.
                 </p>
 
                 <hr style="border:none;border-top:1px solid #f0f0f0;margin:0 0 20px;">

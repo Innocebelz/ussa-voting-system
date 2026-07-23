@@ -1392,7 +1392,7 @@ def chat_assistant(payload: ChatMessage):
     # ── 15. Greeting / small talk ────────────────────────────────────────────
     elif contains_any(["hi", "hello", "hey", "good morning", "good afternoon", "good evening"]) and len(msg) < 25:
         reply = (
-            "Hello! 👋 I'm the U.S.S.A Election Assistant. Ask me about OTP codes, unopposed "
+            "Hello! 👋 I'm the U.S.A.A Election Assistant. Ask me about OTP codes, unopposed "
             "candidates, ballot verification, or when results will be published — or use one of "
             "the quick action buttons above."
         )

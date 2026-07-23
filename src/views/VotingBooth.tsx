@@ -16,21 +16,15 @@ const VotingBooth: React.FC = () => {
     const navigate = useNavigate();
     const confirmRef = useRef<HTMLDivElement>(null);
 
-    // Fade-in on mount
     useEffect(() => {
         const t = setTimeout(() => setVisible(true), 30);
         return () => clearTimeout(t);
     }, []);
 
-    // REMOVED: The useEffect that pre-selected unopposed candidates is gone.
-    // Unopposed candidates now start completely blank.
-
     const handleSelect = (position: string, candidateId: string) => {
         setSelections(prev => {
             const category = ELECTION_DATA.find(c => c.position === position);
 
-            // If the category is unopposed and the user clicks the currently selected candidate again,
-            // we "un-check" it, returning it to a blank/abstain state.
             if (category?.unopposed && prev[position] === candidateId) {
                 const newSelections = { ...prev };
                 delete newSelections[position];
@@ -40,19 +34,15 @@ const VotingBooth: React.FC = () => {
             return { ...prev, [position]: candidateId };
         });
 
-        // Brief pulse feedback
         setJustSelected(candidateId);
         setTimeout(() => setJustSelected(null), 600);
     };
 
     const toggleManifesto = (candidateId: string, e: React.MouseEvent) => {
-        e.stopPropagation(); // don't trigger card selection
+        e.stopPropagation();
         setExpanded(prev => ({ ...prev, [candidateId]: !prev[candidateId] }));
     };
 
-    // ── Form Validation Math ──────────────────────────────────────────────
-    // We only require students to vote in competitive (opposed) races.
-    // Unopposed races are optional (blank = abstain/no).
     const opposedCategories = ELECTION_DATA.filter(c => !c.unopposed);
     const requiredPositionsCount = opposedCategories.length;
     const selectedRequiredCount = opposedCategories.filter(c => selections[c.position]).length;
@@ -60,7 +50,6 @@ const VotingBooth: React.FC = () => {
     const remaining = requiredPositionsCount - selectedRequiredCount;
     const isFormComplete = remaining === 0;
 
-    // Progress bar fills up based ONLY on the required competitive races
     const progressPct = requiredPositionsCount === 0
         ? 100
         : Math.round((selectedRequiredCount / requiredPositionsCount) * 100);
@@ -70,14 +59,11 @@ const VotingBooth: React.FC = () => {
             setSubmitError('');
             setIsSubmitting(true);
             await vote(selections);
-            // Navigate first, then close modal — avoids a flash where the modal
-            // briefly re-renders after hasVoted becomes true in the route guard
             navigate('/results');
             setShowConfirm(false);
         } catch (error: any) {
             const message: string = error?.message || 'Something went wrong. Please try again.';
             console.error('[VotingBooth] vote failed:', message);
-            // Vote session expired — send them back to re-verify OTP
             if (message.toLowerCase().includes('session') || message.toLowerCase().includes('expired') || message.toLowerCase().includes('401')) {
                 setShowConfirm(false);
                 navigate('/verify');
@@ -136,74 +122,86 @@ const VotingBooth: React.FC = () => {
             {/* ── Ballot positions ───────────────────────────────────────── */}
             <div className="flex-1 space-y-6 mb-4">
                 {ELECTION_DATA.map((category) => {
-                    const positionSelected = !!selections[category.position];
+                    const positionSelected  = !!selections[category.position];
+                    const selectedCandidate = category.candidates.find(c => c.id === selections[category.position]);
+                    const isPresident       = category.position.toLowerCase() === 'president';
 
                     return (
                         <div
                             key={category.position}
-                            className={`bg-white rounded-2xl border-2 overflow-hidden transition-all duration-300 ${
-                                positionSelected ? 'border-yellow-400 shadow-md' : 'border-zinc-200'
+                            className={`bg-white rounded-2xl overflow-hidden transition-all duration-300 ${
+                                isPresident
+                                    ? `border-4 ${positionSelected ? 'border-yellow-400 shadow-lg' : 'border-zinc-300 shadow-md'}`
+                                    : `border-2 ${positionSelected ? 'border-yellow-400 shadow-md' : 'border-zinc-200'}`
                             }`}
                         >
                             {/* Position header */}
-                            <div className={`px-4 py-3 flex items-center justify-between border-b-2 ${
+                            <div className={`px-4 flex items-center justify-between border-b-2 ${
                                 positionSelected ? 'bg-yellow-50 border-yellow-200' : 'bg-zinc-50 border-zinc-100'
-                            }`}>
-                                <div className="flex items-center gap-2">
+                            } ${isPresident ? 'py-4' : 'py-3'}`}>
+                                <div className="flex items-center gap-2 min-w-0">
                                     {positionSelected
-                                        ? <CheckCircle2 className="w-4 h-4 text-yellow-600 shrink-0" />
-                                        : <div className="w-4 h-4 rounded-full border-2 border-zinc-300 shrink-0" />
+                                        ? <CheckCircle2 className={`shrink-0 text-yellow-600 ${isPresident ? 'w-5 h-5' : 'w-4 h-4'}`} />
+                                        : <div className={`rounded-full border-2 border-zinc-300 shrink-0 ${isPresident ? 'w-5 h-5' : 'w-4 h-4'}`} />
                                     }
-                                    <h3 className="font-black text-zinc-900 uppercase tracking-tight text-sm sm:text-base">
-                                        {category.position}
-                                    </h3>
+                                    <div className="min-w-0">
+                                        <h3 className={`font-black text-zinc-900 uppercase tracking-tight ${isPresident ? 'text-base sm:text-lg' : 'text-sm sm:text-base'}`}>
+                                            {category.position}
+                                        </h3>
+                                        {/* Text confirmation of who was picked */}
+                                        <p className={`text-xs font-bold text-yellow-700 truncate overflow-hidden transition-all duration-200 ${
+                                            selectedCandidate ? 'max-h-5 opacity-100 mt-0.5' : 'max-h-0 opacity-0'
+                                        }`}>
+                                            {selectedCandidate ? `Selected: ${selectedCandidate.name}` : ''}
+                                        </p>
+                                    </div>
                                 </div>
                                 {category.unopposed && (
-                                    <span className="text-[10px] font-black text-green-700 bg-green-100 border border-green-200 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                    <span className="text-[10px] font-black text-green-700 bg-green-100 border border-green-200 px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0">
                                         Unopposed
                                     </span>
                                 )}
                             </div>
 
-                            {/* Candidate list — compact rows */}
+                            {/* Candidate list — larger, more visible photos */}
                             <div className="divide-y divide-zinc-100">
                                 {category.candidates.map((candidate) => {
                                     const isSelected  = selections[category.position] === candidate.id;
                                     const isExpanded  = expanded[candidate.id] ?? false;
                                     const isPulsing   = justSelected === candidate.id;
+                                    const photoSize   = isPresident ? 'w-20 h-20 sm:w-24 sm:h-24' : 'w-16 h-16 sm:w-20 sm:h-20';
 
                                     return (
                                         <div key={candidate.id} className="flex flex-col">
 
                                             {/* ── Candidate row ── */}
-                                            {/* FIX: Unopposed candidates are no longer disabled. They can be clicked to toggle selection. */}
                                             <button
                                                 onClick={() => handleSelect(category.position, candidate.id)}
-                                                className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-all duration-200 active:bg-zinc-50 ${
+                                                className={`w-full flex items-center gap-4 px-4 py-4 text-left transition-all duration-200 active:bg-zinc-50 ${
                                                     isSelected ? 'bg-yellow-50' : 'bg-white hover:bg-zinc-50'
                                                 } ${isPulsing ? 'scale-[0.99]' : 'scale-100'}`}
                                             >
-                                                {/* Photo — small on mobile, bigger on desktop */}
-                                                <div className={`relative shrink-0 transition-all duration-300 ${isSelected ? 'ring-2 ring-yellow-500 ring-offset-1 rounded-full' : ''}`}>
+                                                {/* Photo — meaningfully larger, this is a person, not an icon */}
+                                                <div className={`relative shrink-0 transition-all duration-300 ${isSelected ? 'ring-4 ring-yellow-500 ring-offset-2 rounded-full' : ''}`}>
                                                     <img
                                                         src={candidate.image}
                                                         alt={candidate.name}
                                                         onError={(e) => {
                                                             (e.target as HTMLImageElement).src =
-                                                                `https://ui-avatars.com/api/?name=${encodeURIComponent(candidate.name)}&background=18181b&color=eab308&size=128`;
+                                                                `https://ui-avatars.com/api/?name=${encodeURIComponent(candidate.name)}&background=18181b&color=eab308&size=256`;
                                                         }}
-                                                        className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover border-2 border-zinc-200"
+                                                        className={`${photoSize} rounded-full object-cover border-2 border-zinc-200 transition-all duration-300`}
                                                     />
                                                     {isSelected && (
-                                                        <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 bg-yellow-500 rounded-full flex items-center justify-center border-2 border-white">
-                                                            <CheckCircle2 className="w-3 h-3 text-zinc-900" />
+                                                        <div className="absolute -bottom-1 -right-1 w-7 h-7 bg-yellow-500 rounded-full flex items-center justify-center border-2 border-white shadow-sm">
+                                                            <CheckCircle2 className="w-4 h-4 text-zinc-900" />
                                                         </div>
                                                     )}
                                                 </div>
 
                                                 {/* Name + position */}
                                                 <div className="flex-1 min-w-0">
-                                                    <p className={`font-black text-sm sm:text-base truncate ${isSelected ? 'text-zinc-900' : 'text-zinc-800'}`}>
+                                                    <p className={`font-black truncate ${isPresident ? 'text-base sm:text-lg' : 'text-sm sm:text-base'} ${isSelected ? 'text-zinc-900' : 'text-zinc-800'}`}>
                                                         {candidate.name}
                                                     </p>
                                                     <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
@@ -212,12 +210,12 @@ const VotingBooth: React.FC = () => {
                                                 </div>
 
                                                 {/* Radio indicator */}
-                                                <div className={`shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
+                                                <div className={`shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
                                                     isSelected
                                                         ? 'border-yellow-500 bg-yellow-500'
                                                         : 'border-zinc-300'
                                                 }`}>
-                                                    {isSelected && <div className="w-2 h-2 rounded-full bg-zinc-900" />}
+                                                    {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-zinc-900" />}
                                                 </div>
                                             </button>
 
@@ -277,7 +275,6 @@ const VotingBooth: React.FC = () => {
                         ref={confirmRef}
                         className="bg-white rounded-2xl shadow-2xl w-full max-w-sm border-2 border-zinc-200 overflow-hidden"
                     >
-                        {/* Gold top bar */}
                         <div className="h-1.5 bg-yellow-500 w-full" />
 
                         <div className="p-6">
@@ -288,7 +285,6 @@ const VotingBooth: React.FC = () => {
                                 Confirm Your Vote
                             </h3>
 
-                            {/* Error box — at the top so it's always visible on mobile */}
                             {submitError && (
                                 <div className="bg-red-50 border-2 border-red-300 rounded-xl px-4 py-3 mb-4 text-sm text-red-700 font-bold text-center">
                                     ⚠️ {submitError}
@@ -303,7 +299,6 @@ const VotingBooth: React.FC = () => {
                                 This cannot be undone.
                             </p>
 
-                            {/* Quick summary of selections */}
                             <div className="bg-zinc-50 rounded-lg border border-zinc-200 divide-y divide-zinc-100 mb-6 text-left max-h-48 overflow-y-auto">
                                 {ELECTION_DATA.map(cat => {
                                     const sel = cat.candidates.find(c => c.id === selections[cat.position]);
